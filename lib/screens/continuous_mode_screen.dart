@@ -28,7 +28,7 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
   double _sliderValue0 = 0.0;
   double _sliderValue1 = 0.0;
   double _sliderValue2 = 0.0;
-  List<List<Offset>> _loadedRegions = [];
+  // Remove _loadedRegions and _checkOverlapWithLoadedRegions logic
   // Add state for warning
   bool _showNextWarning = false;
 
@@ -66,14 +66,7 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
         )
         .toList();
     _regionKey.currentState?.loadExistingRegions(currentImageRegions);
-    // Store for overlap check
-    _loadedRegions = currentImageRegions.map((region) {
-      final pathJson = region.pathJson as String;
-      final List<dynamic> jsonData = jsonDecode(pathJson);
-      return jsonData
-          .map((point) => Offset(point['x'].toDouble(), point['y'].toDouble()))
-          .toList();
-    }).toList();
+    // No need to update _loadedRegions
     // Load last color event
     final events = await ContinuousDbService.fetchEvents();
     final matchingEvents = events
@@ -86,17 +79,23 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
         .toList();
     final last = matchingEvents.isNotEmpty ? matchingEvents.last : null;
     if (last != null) {
+      int? restoredSlider;
+      double v0 = 0.0, v1 = 0.0, v2 = 0.0;
+      if (last.colorA == 'Pale' && last.colorB == 'Pink') {
+        restoredSlider = 0;
+        v0 = last.percentB / 100.0;
+      } else if (last.colorA == 'Pink' && last.colorB == 'Red') {
+        restoredSlider = 1;
+        v1 = last.percentB / 100.0;
+      } else if (last.colorA == 'Red' && last.colorB == 'DeepRed') {
+        restoredSlider = 2;
+        v2 = last.percentB / 100.0;
+      }
       setState(() {
-        _sliderValue0 = (last.colorA == 'Pale' && last.colorB == 'Pink')
-            ? (last.percentB / 100.0)
-            : 0.0;
-        _sliderValue1 = (last.colorA == 'Pink' && last.colorB == 'Red')
-            ? (last.percentB / 100.0)
-            : 0.0;
-        _sliderValue2 = (last.colorA == 'Red' && last.colorB == 'DeepRed')
-            ? (last.percentB / 100.0)
-            : 0.0;
-        _selectedSlider = null;
+        _sliderValue0 = v0;
+        _sliderValue1 = v1;
+        _sliderValue2 = v2;
+        _selectedSlider = restoredSlider;
       });
     } else {
       setState(() {
@@ -198,7 +197,11 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
     }
     // Save color event if a slider is selected
     if (_selectedSlider != null) {
-      await _saveOrUpdateColorEvent(_selectedSlider!, _sliderValue0);
+      double value = 0.0;
+      if (_selectedSlider == 0) value = _sliderValue0;
+      if (_selectedSlider == 1) value = _sliderValue1;
+      if (_selectedSlider == 2) value = _sliderValue2;
+      await _saveOrUpdateColorEvent(_selectedSlider!, value);
     }
     if (idx < total - 1) {
       setState(() {
@@ -228,30 +231,6 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
 
   void _handleRegionComplete(List<Offset> poly) async {
     if (!_isSelectionMode || poly.isEmpty) return;
-    // Check for overlap
-    if (_checkOverlapWithLoadedRegions(poly)) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: const [
-                Icon(Icons.warning, color: Colors.red),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Regions cannot overlap! Please draw non-overlapping regions.',
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: Colors.orange[100],
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
-      return;
-    }
     final doc = Provider.of<DoctorProvider>(context, listen: false).name;
     final jsonPoly = jsonEncode(
       poly.map((o) => {'x': o.dx, 'y': o.dy}).toList(),
@@ -279,65 +258,9 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
     });
   }
 
-  bool _checkOverlapWithLoadedRegions(List<Offset> newPoly) {
-    // Use the same logic as RegionSelectorState._checkOverlap
-    if (_loadedRegions.isEmpty || newPoly.length < 3) return false;
-    for (final existingPolygon in _loadedRegions) {
-      if (existingPolygon.length < 3) continue;
-      for (final point in newPoly) {
-        if (_isPointInPolygon(point, existingPolygon)) return true;
-      }
-      for (final point in existingPolygon) {
-        if (_isPointInPolygon(point, newPoly)) return true;
-      }
-      if (_doPolygonsIntersect(newPoly, existingPolygon)) return true;
-    }
-    return false;
-  }
-
-  bool _isPointInPolygon(Offset point, List<Offset> polygon) {
-    if (polygon.length < 3) return false;
-    int intersections = 0;
-    for (int i = 0; i < polygon.length; i++) {
-      final j = (i + 1) % polygon.length;
-      final p1 = polygon[i];
-      final p2 = polygon[j];
-      if (((p1.dy > point.dy) != (p2.dy > point.dy)) &&
-          (point.dx <
-              (p2.dx - p1.dx) * (point.dy - p1.dy) / (p2.dy - p1.dy) + p1.dx)) {
-        intersections++;
-      }
-    }
-    return intersections % 2 == 1;
-  }
-
-  bool _doPolygonsIntersect(List<Offset> poly1, List<Offset> poly2) {
-    for (int i = 0; i < poly1.length; i++) {
-      final a1 = poly1[i];
-      final a2 = poly1[(i + 1) % poly1.length];
-      for (int j = 0; j < poly2.length; j++) {
-        final b1 = poly2[j];
-        final b2 = poly2[(j + 1) % poly2.length];
-        if (_doLinesIntersect(a1, a2, b1, b2)) return true;
-      }
-    }
-    return false;
-  }
-
-  bool _doLinesIntersect(Offset a1, Offset a2, Offset b1, Offset b2) {
-    final denom =
-        (b2.dy - b1.dy) * (a2.dx - a1.dx) - (b2.dx - b1.dx) * (a2.dy - a1.dy);
-    if (denom == 0) return false; // Lines are parallel
-    final ua =
-        ((b2.dx - b1.dx) * (a1.dy - b1.dy) -
-            (b2.dy - b1.dy) * (a1.dx - b1.dx)) /
-        denom;
-    final ub =
-        ((a2.dx - a1.dx) * (a1.dy - b1.dy) -
-            (a2.dy - a1.dy) * (a1.dx - b1.dx)) /
-        denom;
-    return ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1;
-  }
+  // Remove _checkOverlapWithLoadedRegions and related code
+  // Remove _isPointInPolygon and _doPolygonsIntersect and related code
+  // Remove _doLinesIntersect and related code
 
   @override
   Widget build(BuildContext context) {
@@ -401,7 +324,7 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
                     _sliderValue1 = 0.0;
                     _sliderValue2 = 0.0;
                     _selectedSlider = null;
-                    _loadedRegions = [];
+                    // _loadedRegions = []; // No longer needed
                   });
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
@@ -505,7 +428,17 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
                                   enabled: _isSelectionMode,
                                   imagePath: img,
                                   onComplete: _handleRegionComplete,
-                                  onOverlapDetected: () {},
+                                  onOverlapDetected: () {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Cannot select overlapping areas. Please select a different region.',
+                                        ),
+                                        duration: Duration(seconds: 2),
+                                        backgroundColor: Colors.orange,
+                                      ),
+                                    );
+                                  }, // match discrete mode
                                   samplingTolerance: 6.0,
                                   child: Image.asset(img),
                                   doctorName: Provider.of<DoctorProvider>(
