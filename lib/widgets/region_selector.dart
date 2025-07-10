@@ -55,6 +55,9 @@ class RegionSelectorState extends State<RegionSelector> {
   Size? _displaySize;
   Rect? _imageRect;
 
+  // Add flag to prevent repeated SnackBars
+  bool _hasShownOutOfBoundsWarning = false;
+
   @override
   void initState() {
     super.initState();
@@ -251,11 +254,30 @@ class RegionSelectorState extends State<RegionSelector> {
 
   void _handlePanStart(DragStartDetails details) {
     _current = [];
+    // Reset out-of-bounds warning flag
+    _hasShownOutOfBoundsWarning = false;
     setState(() {});
   }
 
   void _handlePanUpdate(DragUpdateDetails details) {
     final p = details.localPosition;
+    // Only allow drawing inside the image rect
+    if (_imageRect != null && !_imageRect!.contains(p)) {
+      // Show warning SnackBar (same style as overlap), only once per stroke
+      if (!_hasShownOutOfBoundsWarning) {
+        _hasShownOutOfBoundsWarning = true;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Cannot select outside the image. Please select a region within the image.',
+            ),
+            duration: Duration(seconds: 2),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
     if (_current.isEmpty ||
         (p - _current.last).distance > widget.samplingTolerance) {
       setState(() => _current.add(p));

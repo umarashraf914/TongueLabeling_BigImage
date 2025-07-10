@@ -30,6 +30,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  shared_preferences: ^2.2.2
   light: ^4.1.0
 
   syncfusion_flutter_xlsio: 29.2.11       # ← for creating real XLSX files

@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:syncfusion_flutter_xlsio/xlsio.dart' as xlsio;
 import 'package:path/path.dart' as p;
 import 'package:light/light.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../providers/doctor_provider.dart';
 import '../services/discrete_db_service.dart';
@@ -39,7 +40,7 @@ class LabelScreen extends StatefulWidget {
 }
 
 class _LabelScreenState extends State<LabelScreen> {
-  late final List<ImageIteration> _sequence;
+  List<ImageIteration> _sequence = [];
   int idx = 0;
   LabelEvent? currentEvent;
 
@@ -64,9 +65,13 @@ class _LabelScreenState extends State<LabelScreen> {
   @override
   void initState() {
     super.initState();
-    _buildSequence();
-    _loadEvent();
+    _initAsync();
     _startLightSensor();
+  }
+
+  Future<void> _initAsync() async {
+    await _buildSequence();
+    await _loadLastIndexAndEvent();
   }
 
   @override
@@ -105,16 +110,35 @@ class _LabelScreenState extends State<LabelScreen> {
     }
   }
 
-  void _buildSequence() {
+  Future<void> _buildSequence() async {
     final base = List.generate(
       2000,
       (i) => 'assets/images/${(i + 1).toString().padLeft(4, '0')}.png',
     );
     final iters = context.read<DoctorProvider>().iterations;
-    _sequence = [
-      for (var n = 1; n <= iters; n++)
-        for (var img in base) ImageIteration(img, n),
-    ]..shuffle();
+    final prefs = await SharedPreferences.getInstance();
+    final doc = context.read<DoctorProvider>().name;
+    final seqKey = 'labelingSequence_${doc}_$iters';
+    final savedSeq = prefs.getString(seqKey);
+    if (savedSeq != null) {
+      // Restore saved sequence
+      final decoded = jsonDecode(savedSeq) as List;
+      _sequence = decoded
+          .map((e) => ImageIteration(e['fileName'], e['iteration']))
+          .toList();
+    } else {
+      // Generate and shuffle new sequence, then save
+      final seq = [
+        for (var n = 1; n <= iters; n++)
+          for (var img in base) ImageIteration(img, n),
+      ];
+      seq.shuffle();
+      _sequence = seq;
+      final toSave = _sequence
+          .map((e) => {'fileName': e.fileName, 'iteration': e.iteration})
+          .toList();
+      await prefs.setString(seqKey, jsonEncode(toSave));
+    }
     debugPrint(
       'First 3 image paths: ${_sequence.take(3).map((e) => '${e.fileName} (iter ${e.iteration})').toList()}',
     );
@@ -130,7 +154,6 @@ class _LabelScreenState extends State<LabelScreen> {
           e.iteration == _sequence[idx].iteration,
     );
     setState(() => currentEvent = match.isEmpty ? null : match.first);
-    _regionKey.currentState?.clearSelection();
     await _loadExistingRegions();
   }
 
@@ -243,8 +266,11 @@ class _LabelScreenState extends State<LabelScreen> {
       if (_canGoNext && idx < total - 1) {
         setState(() {
           idx++;
-          _loadEvent();
         });
+        SharedPreferences.getInstance().then((prefs) {
+          prefs.setInt('lastDiscreteIdx', idx);
+        });
+        _loadEvent();
       } else {
         // Show warning message for 1.5 seconds
         setState(() {
@@ -263,14 +289,43 @@ class _LabelScreenState extends State<LabelScreen> {
       if (idx < total - 1) {
         setState(() {
           idx++;
-          _loadEvent();
         });
+        SharedPreferences.getInstance().then((prefs) {
+          prefs.setInt('lastDiscreteIdx', idx);
+        });
+        _loadEvent();
       }
     }
   }
 
+  Future<void> _loadLastIndexAndEvent() async {
+    final prefs = await SharedPreferences.getInstance();
+    final lastIdx = prefs.getInt('lastDiscreteIdx') ?? 0;
+    final lastMode = prefs.getBool('discreteIsSelectionMode') ?? false;
+    final doc = context.read<DoctorProvider>().name;
+    final iters = context.read<DoctorProvider>().iterations;
+    final seqKey = 'labelingSequence_${doc}_$iters';
+    final savedSeq = prefs.getString(seqKey);
+    if (savedSeq == null) {
+      await _buildSequence();
+    } else {
+      final decoded = jsonDecode(savedSeq) as List;
+      _sequence = decoded
+          .map((e) => ImageIteration(e['fileName'], e['iteration']))
+          .toList();
+    }
+    setState(() {
+      idx = lastIdx;
+      _isSelectionMode = lastMode;
+    });
+    _loadEvent();
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_sequence.isEmpty) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
     final total = _sequence.length;
     final doc = context.watch<DoctorProvider>().name;
     final img = _sequence[idx].fileName;
@@ -385,13 +440,18 @@ class _LabelScreenState extends State<LabelScreen> {
                                 : Icons.touch_app,
                           ),
                           label: Text(_isSelectionMode ? 'View' : 'Select'),
-                          onPressed: () {
+                          onPressed: () async {
                             setState(() {
                               _isSelectionMode = !_isSelectionMode;
                               if (!_isSelectionMode) {
                                 _regionKey.currentState?.clearSelection();
                               }
                             });
+                            final prefs = await SharedPreferences.getInstance();
+                            await prefs.setBool(
+                              'discreteIsSelectionMode',
+                              _isSelectionMode,
+                            );
                           },
                         ),
                         // NEW: Add the Undo button only in selection mode
@@ -507,8 +567,11 @@ class _LabelScreenState extends State<LabelScreen> {
                             ? () {
                                 setState(() {
                                   idx--;
-                                  _loadEvent();
                                 });
+                                SharedPreferences.getInstance().then((prefs) {
+                                  prefs.setInt('lastDiscreteIdx', idx);
+                                });
+                                _loadEvent();
                               }
                             : null,
                         child: const Text('Previous'),

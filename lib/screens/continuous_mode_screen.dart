@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'database_view.dart' show ContinuousDatabaseViewScreen;
 import 'dart:convert';
 import '../services/db_service.dart' show RegionSelection;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ContinuousModeScreen extends StatefulWidget {
   const ContinuousModeScreen({super.key});
@@ -19,7 +20,7 @@ class ContinuousModeScreen extends StatefulWidget {
 class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
   bool _isSelectionMode = false;
   int idx = 0;
-  late final List<ImageIteration> _sequence;
+  List<ImageIteration> _sequence = [];
   ContinuousLabelEvent? currentEvent;
   final GlobalKey<RegionSelectorState> _regionKey =
       GlobalKey<RegionSelectorState>();
@@ -35,20 +36,72 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
   @override
   void initState() {
     super.initState();
-    _buildSequence();
+    _initAsync();
+  }
+
+  Future<void> _initAsync() async {
+    await _buildSequence();
+    await _loadLastIndexAndEvent();
+  }
+
+  Future<void> _loadLastIndexAndEvent() async {
+    final prefs = await SharedPreferences.getInstance();
+    final lastIdx = prefs.getInt('lastContinuousIdx') ?? 0;
+    final lastMode = prefs.getBool('continuousIsSelectionMode') ?? false;
+    final doc = Provider.of<DoctorProvider>(context, listen: false).name;
+    final iters = Provider.of<DoctorProvider>(
+      context,
+      listen: false,
+    ).iterations;
+    final seqKey = 'labelingSequence_${doc}_$iters';
+    final savedSeq = prefs.getString(seqKey);
+    if (savedSeq == null) {
+      await _buildSequence();
+    } else {
+      final decoded = jsonDecode(savedSeq) as List;
+      _sequence = decoded
+          .map((e) => ImageIteration(e['fileName'], e['iteration']))
+          .toList();
+    }
+    setState(() {
+      idx = lastIdx;
+      _isSelectionMode = lastMode;
+    });
     _loadEvent();
   }
 
-  void _buildSequence() {
+  Future<void> _buildSequence() async {
     final base = List.generate(
       2000,
       (i) => 'assets/images/' + (i + 1).toString().padLeft(4, '0') + '.png',
     );
-    final iters = 1; // Only 1 iteration for continuous mode
-    _sequence = [
-      for (var n = 1; n <= iters; n++)
-        for (var img in base) ImageIteration(img, n),
-    ];
+    final iters = Provider.of<DoctorProvider>(
+      context,
+      listen: false,
+    ).iterations;
+    final prefs = await SharedPreferences.getInstance();
+    final doc = Provider.of<DoctorProvider>(context, listen: false).name;
+    final seqKey = 'labelingSequence_${doc}_$iters';
+    final savedSeq = prefs.getString(seqKey);
+    if (savedSeq != null) {
+      // Restore saved sequence
+      final decoded = jsonDecode(savedSeq) as List;
+      _sequence = decoded
+          .map((e) => ImageIteration(e['fileName'], e['iteration']))
+          .toList();
+    } else {
+      // Generate and shuffle new sequence, then save
+      final seq = [
+        for (var n = 1; n <= iters; n++)
+          for (var img in base) ImageIteration(img, n),
+      ];
+      seq.shuffle();
+      _sequence = seq;
+      final toSave = _sequence
+          .map((e) => {'fileName': e.fileName, 'iteration': e.iteration})
+          .toList();
+      await prefs.setString(seqKey, jsonEncode(toSave));
+    }
   }
 
   Future<void> _loadEvent() async {
@@ -206,12 +259,14 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
     if (idx < total - 1) {
       setState(() {
         idx++;
-        _loadEvent();
         _selectedSlider = null;
         _sliderValue0 = 0.0;
         _sliderValue1 = 0.0;
         _sliderValue2 = 0.0;
       });
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('lastContinuousIdx', idx);
+      _loadEvent();
     }
   }
 
@@ -264,6 +319,9 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_sequence.isEmpty) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
     final total = _sequence.length;
     final img = _sequence[idx].fileName;
     return Scaffold(
@@ -271,12 +329,24 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
         title: Text('[Continuous] ${idx + 1}/$total'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.grid_on),
-            tooltip: 'Switch to Discrete Mode',
+            icon: const Icon(Icons.visibility),
+            tooltip: 'Preview Regions',
             onPressed: () {
+              final doc = Provider.of<DoctorProvider>(
+                context,
+                listen: false,
+              ).name;
+              final iteration = _sequence[idx].iteration;
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const LabelScreen()),
+                MaterialPageRoute(
+                  builder: (_) => RegionPreviewScreen(
+                    fileName: img,
+                    doctorName: doc,
+                    iteration: iteration,
+                    mode: 'continuous',
+                  ),
+                ),
               );
             },
           ),
@@ -289,6 +359,16 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
                 builder: (_) => const ContinuousDatabaseViewScreen(),
               ),
             ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.grid_on),
+            tooltip: 'Switch to Discrete Mode',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const LabelScreen()),
+              );
+            },
           ),
           IconButton(
             icon: const Icon(Icons.delete_forever),
@@ -326,6 +406,7 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
                     _selectedSlider = null;
                     // _loadedRegions = []; // No longer needed
                   });
+                  _regionKey.currentState?.clearSelection();
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text('Continuous mode database cleared.'),
@@ -334,28 +415,6 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
                   );
                 }
               }
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.visibility),
-            tooltip: 'Preview Regions',
-            onPressed: () {
-              final doc = Provider.of<DoctorProvider>(
-                context,
-                listen: false,
-              ).name;
-              final iteration = _sequence[idx].iteration;
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => RegionPreviewScreen(
-                    fileName: img,
-                    doctorName: doc,
-                    iteration: iteration,
-                    mode: 'continuous',
-                  ),
-                ),
-              );
             },
           ),
         ],
@@ -381,13 +440,18 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
                       _isSelectionMode ? Icons.visibility : Icons.touch_app,
                     ),
                     label: Text(_isSelectionMode ? 'View' : 'Select'),
-                    onPressed: () {
+                    onPressed: () async {
                       setState(() {
                         _isSelectionMode = !_isSelectionMode;
                         if (!_isSelectionMode) {
                           _regionKey.currentState?.clearSelection();
                         }
                       });
+                      final prefs = await SharedPreferences.getInstance();
+                      await prefs.setBool(
+                        'continuousIsSelectionMode',
+                        _isSelectionMode,
+                      );
                     },
                   ),
                   if (_isSelectionMode) ...[
@@ -507,15 +571,17 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
                 children: [
                   TextButton(
                     onPressed: idx > 0
-                        ? () {
+                        ? () async {
                             setState(() {
                               idx--;
-                              _loadEvent();
                               _selectedSlider = null;
                               _sliderValue0 = 0.0;
                               _sliderValue1 = 0.0;
                               _sliderValue2 = 0.0;
                             });
+                            final prefs = await SharedPreferences.getInstance();
+                            await prefs.setInt('lastContinuousIdx', idx);
+                            _loadEvent();
                           }
                         : null,
                     child: const Text('Previous'),
