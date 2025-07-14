@@ -12,7 +12,7 @@ class DiscreteDbService {
     final dbPath = join(documentsDir.path, 'discrete_mode.db');
     _db = await openDatabase(
       dbPath,
-      version: 1,
+      version: 2, // Bump version to add sessionId columns
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE events (
@@ -22,7 +22,8 @@ class DiscreteDbService {
             color      TEXT NOT NULL,
             iteration  INTEGER NOT NULL,
             timestamp  TEXT NOT NULL,
-            ambientLux INTEGER
+            ambientLux INTEGER,
+            sessionId  TEXT NOT NULL DEFAULT ''
           )
         ''');
         await db.execute('''
@@ -33,9 +34,23 @@ class DiscreteDbService {
             pathJson   TEXT NOT NULL,
             iteration  INTEGER NOT NULL,
             timestamp  TEXT NOT NULL,
-            ambientLux INTEGER
+            ambientLux INTEGER,
+            sessionId  TEXT NOT NULL DEFAULT ''
           )
         ''');
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          // Add sessionId column to existing tables
+          await db.execute('''
+            ALTER TABLE events
+            ADD COLUMN sessionId TEXT NOT NULL DEFAULT ''
+          ''');
+          await db.execute('''
+            ALTER TABLE regions
+            ADD COLUMN sessionId TEXT NOT NULL DEFAULT ''
+          ''');
+        }
       },
     );
     return _db!;
@@ -79,12 +94,14 @@ class DiscreteDbService {
     required String doctorName,
     required String fileName,
     required int iteration,
+    required String sessionId,
   }) async {
     final database = await db;
     final rows = await database.query(
       'regions',
-      where: 'doctorName = ? AND fileName = ? AND iteration = ?',
-      whereArgs: [doctorName, fileName, iteration],
+      where:
+          'doctorName = ? AND fileName = ? AND iteration = ? AND sessionId = ?',
+      whereArgs: [doctorName, fileName, iteration, sessionId],
       orderBy: 'timestamp DESC',
       limit: 1,
     );

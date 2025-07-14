@@ -2,17 +2,82 @@ import 'package:flutter/material.dart';
 import '../services/db_service.dart' show LabelEvent, RegionSelection;
 import '../services/discrete_db_service.dart';
 import '../services/continuous_db_service.dart';
-import '../services/continuous_db_service.dart' show ContinuousLabelEvent;
+import 'package:provider/provider.dart';
+import '../providers/doctor_provider.dart';
 
-class DatabaseViewScreen extends StatelessWidget {
+class DatabaseViewScreen extends StatefulWidget {
   const DatabaseViewScreen({super.key});
 
   @override
+  State<DatabaseViewScreen> createState() => _DatabaseViewScreenState();
+}
+
+class _DatabaseViewScreenState extends State<DatabaseViewScreen> {
+  bool _showAll = false;
+
+  Future<bool> _promptForAdminPassword(BuildContext context) async {
+    final controller = TextEditingController();
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Admin Password'),
+        content: TextField(
+          controller: controller,
+          obscureText: true,
+          decoration: const InputDecoration(labelText: 'Enter admin password'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop(controller.text == 'admin123');
+            },
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+    return result == true;
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final doc = Provider.of<DoctorProvider>(context, listen: false).name;
+    final iters = Provider.of<DoctorProvider>(
+      context,
+      listen: false,
+    ).iterations;
+    final sessionId = '${doc}_$iters';
     return Scaffold(
-      appBar: AppBar(title: const Text('🔍 Database Contents')),
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('🔍 Database Contents'),
+            Text('Session: $sessionId', style: const TextStyle(fontSize: 13)),
+          ],
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.admin_panel_settings),
+            tooltip: 'Global DB View (Admin)',
+            onPressed: () async {
+              final ok = await _promptForAdminPassword(context);
+              if (ok) {
+                setState(() => _showAll = true);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Incorrect password.')),
+                );
+              }
+            },
+          ),
+        ],
+      ),
       body: FutureBuilder<List<dynamic>>(
-        // fetch both tables in parallel
         future: Future.wait([
           DiscreteDbService.fetchEvents(),
           DiscreteDbService.fetchRegions(),
@@ -25,8 +90,13 @@ class DatabaseViewScreen extends StatelessWidget {
             return Center(child: Text('Error: ${snap.error}'));
           }
 
-          final events = snap.data![0] as List<LabelEvent>;
-          final regions = snap.data![1] as List<RegionSelection>;
+          var events = snap.data![0] as List<LabelEvent>;
+          var regions = snap.data![1] as List<RegionSelection>;
+
+          if (!_showAll) {
+            events = events.where((e) => e.sessionId == sessionId).toList();
+            regions = regions.where((r) => r.sessionId == sessionId).toList();
+          }
 
           return ListView(
             children: [
@@ -40,7 +110,7 @@ class DatabaseViewScreen extends StatelessWidget {
               ...events.map(
                 (e) => ListTile(
                   title: Text(
-                    '${e.fileName}  •  ${e.color}  •  pass ${e.iteration}',
+                    '${e.doctorName} | ${e.fileName} | [${e.color}] | pass ${e.iteration} | sessionId: ${e.sessionId}',
                   ),
                   subtitle: Text(e.timestamp.toIso8601String()),
                 ),
@@ -55,7 +125,9 @@ class DatabaseViewScreen extends StatelessWidget {
               ),
               ...regions.map(
                 (r) => ListTile(
-                  title: Text('${r.fileName}  •  pass ${r.iteration}'),
+                  title: Text(
+                    '${r.doctorName} | ${r.fileName} | pass ${r.iteration} | sessionId: ${r.sessionId}',
+                  ),
                   subtitle: Text(r.pathJson),
                   trailing: Text(r.timestamp.toIso8601String()),
                 ),
@@ -68,16 +140,85 @@ class DatabaseViewScreen extends StatelessWidget {
   }
 }
 
-class ContinuousDatabaseViewScreen extends StatelessWidget {
+class ContinuousDatabaseViewScreen extends StatefulWidget {
   const ContinuousDatabaseViewScreen({super.key});
 
   @override
+  State<ContinuousDatabaseViewScreen> createState() =>
+      _ContinuousDatabaseViewScreenState();
+}
+
+class _ContinuousDatabaseViewScreenState
+    extends State<ContinuousDatabaseViewScreen> {
+  bool _showAll = false;
+
+  Future<bool> _promptForAdminPassword(BuildContext context) async {
+    final controller = TextEditingController();
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Admin Password'),
+        content: TextField(
+          controller: controller,
+          obscureText: true,
+          decoration: const InputDecoration(labelText: 'Enter admin password'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop(controller.text == 'admin123');
+            },
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+    return result == true;
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final doc = Provider.of<DoctorProvider>(context, listen: false).name;
+    final iters = Provider.of<DoctorProvider>(
+      context,
+      listen: false,
+    ).iterations;
+    final sessionId = '${doc}_$iters';
     return Scaffold(
-      appBar: AppBar(title: const Text('🔍 Continuous Mode Database')),
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('🔍 Continuous Mode Database'),
+            Text('Session: $sessionId', style: const TextStyle(fontSize: 13)),
+          ],
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.admin_panel_settings),
+            tooltip: 'Global DB View (Admin)',
+            onPressed: () async {
+              final ok = await _promptForAdminPassword(context);
+              if (ok) {
+                setState(() => _showAll = true);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Incorrect password.')),
+                );
+              }
+            },
+          ),
+        ],
+      ),
       body: FutureBuilder<List<dynamic>>(
         future: Future.wait([
-          ContinuousDbService.fetchEvents(),
+          ContinuousDbService.fetchEvents(
+            sessionId: _showAll ? null : sessionId,
+          ),
           ContinuousDbService.fetchRegions(),
         ]),
         builder: (ctx, snap) {
@@ -85,11 +226,15 @@ class ContinuousDatabaseViewScreen extends StatelessWidget {
             return const Center(child: CircularProgressIndicator());
           }
           if (snap.hasError) {
-            return Center(child: Text('Error: \\${snap.error}'));
+            return Center(child: Text('Error: ${snap.error}'));
           }
 
-          final events = snap.data![0] as List<ContinuousLabelEvent>;
-          final regions = snap.data![1] as List<RegionSelection>;
+          var events = snap.data![0] as List<ContinuousLabelEvent>;
+          var regions = snap.data![1] as List<RegionSelection>;
+
+          if (!_showAll) {
+            regions = regions.where((r) => r.sessionId == sessionId).toList();
+          }
 
           return ListView(
             children: [
@@ -103,7 +248,7 @@ class ContinuousDatabaseViewScreen extends StatelessWidget {
               ...events.map(
                 (e) => ListTile(
                   title: Text(
-                    '\\${e.fileName}  •  [\\${e.colorA} (\\${e.percentA.toStringAsFixed(1)}%) + \\${e.colorB} (\\${e.percentB.toStringAsFixed(1)}%)]  •  pass \\${e.iteration}',
+                    '${e.doctorName} | ${e.fileName} | [${e.colorA} (${e.percentA.toStringAsFixed(1)}%) + ${e.colorB} (${e.percentB.toStringAsFixed(1)}%)] | pass ${e.iteration} | sessionId: ${e.sessionId}',
                   ),
                   subtitle: Text(e.timestamp.toIso8601String()),
                 ),
@@ -118,7 +263,9 @@ class ContinuousDatabaseViewScreen extends StatelessWidget {
               ),
               ...regions.map(
                 (r) => ListTile(
-                  title: Text('\\${r.fileName}  •  pass \\${r.iteration}'),
+                  title: Text(
+                    '${r.doctorName} | ${r.fileName} | pass ${r.iteration} | sessionId: ${r.sessionId}',
+                  ),
                   subtitle: Text(r.pathJson),
                   trailing: Text(r.timestamp.toIso8601String()),
                 ),

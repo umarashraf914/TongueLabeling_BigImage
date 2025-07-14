@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'continuous_mode_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ModeSelectionScreen extends StatelessWidget {
   const ModeSelectionScreen({super.key});
@@ -7,7 +8,25 @@ class ModeSelectionScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Select Labeling Mode')),
+      appBar: AppBar(
+        title: const Text('Select Labeling Mode'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Logout',
+            onPressed: () async {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.remove('currentUser');
+              await prefs.remove('currentIterations');
+              Navigator.pushNamedAndRemoveUntil(
+                context,
+                '/login',
+                (route) => false,
+              );
+            },
+          ),
+        ],
+      ),
       body: Center(
         child: Card(
           elevation: 12,

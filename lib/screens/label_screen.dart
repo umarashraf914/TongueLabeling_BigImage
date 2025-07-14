@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -121,18 +122,19 @@ class _LabelScreenState extends State<LabelScreen> {
     final seqKey = 'labelingSequence_${doc}_$iters';
     final savedSeq = prefs.getString(seqKey);
     if (savedSeq != null) {
-      // Restore saved sequence
       final decoded = jsonDecode(savedSeq) as List;
       _sequence = decoded
           .map((e) => ImageIteration(e['fileName'], e['iteration']))
           .toList();
     } else {
-      // Generate and shuffle new sequence, then save
+      // Shuffle base list ONCE with fixed seed
+      final shuffled = List<String>.from(base);
+      shuffled.shuffle(Random(42));
+      // Repeat for each iteration, grouping by pass
       final seq = [
         for (var n = 1; n <= iters; n++)
-          for (var img in base) ImageIteration(img, n),
+          for (var img in shuffled) ImageIteration(img, n),
       ];
-      seq.shuffle();
       _sequence = seq;
       final toSave = _sequence
           .map((e) => {'fileName': e.fileName, 'iteration': e.iteration})
@@ -146,15 +148,29 @@ class _LabelScreenState extends State<LabelScreen> {
 
   Future<void> _loadEvent() async {
     final doc = context.read<DoctorProvider>().name;
+    final iters = context.read<DoctorProvider>().iterations;
+    final sessionId = '${doc}_$iters';
     final all = await DiscreteDbService.fetchEvents();
     final match = all.where(
       (e) =>
-          e.doctorName == doc &&
+          e.sessionId == sessionId &&
           e.fileName == _sequence[idx].fileName &&
           e.iteration == _sequence[idx].iteration,
     );
     setState(() => currentEvent = match.isEmpty ? null : match.first);
-    await _loadExistingRegions();
+    // Load regions after first frame
+    final regions = await DiscreteDbService.fetchRegions();
+    final currentImageRegions = regions
+        .where(
+          (r) =>
+              r.sessionId == sessionId &&
+              r.fileName == _sequence[idx].fileName &&
+              r.iteration == _sequence[idx].iteration,
+        )
+        .toList();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _regionKey.currentState?.loadExistingRegions(currentImageRegions);
+    });
   }
 
   Future<void> _loadExistingRegions() async {
@@ -173,6 +189,8 @@ class _LabelScreenState extends State<LabelScreen> {
 
   Future<void> _onColorTap(String color) async {
     final doc = context.read<DoctorProvider>().name;
+    final iters = context.read<DoctorProvider>().iterations;
+    final sessionId = '${doc}_$iters';
     if (currentEvent == null) {
       await DiscreteDbService.insertEvent(
         LabelEvent(
@@ -182,6 +200,7 @@ class _LabelScreenState extends State<LabelScreen> {
           iteration: _sequence[idx].iteration,
           timestamp: DateTime.now(),
           ambientLux: _currentLux,
+          sessionId: sessionId,
         ),
       );
     } else {
@@ -193,6 +212,8 @@ class _LabelScreenState extends State<LabelScreen> {
   Future<void> _onRegionComplete(List<Offset> poly) async {
     if (!_isSelectionMode || poly.isEmpty) return;
     final doc = context.read<DoctorProvider>().name;
+    final iters = context.read<DoctorProvider>().iterations;
+    final sessionId = '${doc}_$iters';
     final jsonPoly = jsonEncode(
       poly.map((o) => {'x': o.dx, 'y': o.dy}).toList(),
     );
@@ -204,6 +225,7 @@ class _LabelScreenState extends State<LabelScreen> {
         iteration: _sequence[idx].iteration,
         timestamp: DateTime.now(),
         ambientLux: _currentLux,
+        sessionId: sessionId,
       ),
     );
     setState(() {
@@ -267,8 +289,11 @@ class _LabelScreenState extends State<LabelScreen> {
         setState(() {
           idx++;
         });
+        final doc = context.read<DoctorProvider>().name;
+        final iters = context.read<DoctorProvider>().iterations;
+        final idxKey = 'lastDiscreteIdx_${doc}_$iters';
         SharedPreferences.getInstance().then((prefs) {
-          prefs.setInt('lastDiscreteIdx', idx);
+          prefs.setInt(idxKey, idx);
         });
         _loadEvent();
       } else {
@@ -290,8 +315,11 @@ class _LabelScreenState extends State<LabelScreen> {
         setState(() {
           idx++;
         });
+        final doc = context.read<DoctorProvider>().name;
+        final iters = context.read<DoctorProvider>().iterations;
+        final idxKey = 'lastDiscreteIdx_${doc}_$iters';
         SharedPreferences.getInstance().then((prefs) {
-          prefs.setInt('lastDiscreteIdx', idx);
+          prefs.setInt(idxKey, idx);
         });
         _loadEvent();
       }
@@ -300,10 +328,11 @@ class _LabelScreenState extends State<LabelScreen> {
 
   Future<void> _loadLastIndexAndEvent() async {
     final prefs = await SharedPreferences.getInstance();
-    final lastIdx = prefs.getInt('lastDiscreteIdx') ?? 0;
-    final lastMode = prefs.getBool('discreteIsSelectionMode') ?? false;
     final doc = context.read<DoctorProvider>().name;
     final iters = context.read<DoctorProvider>().iterations;
+    final idxKey = 'lastDiscreteIdx_${doc}_$iters';
+    final lastIdx = prefs.getInt(idxKey) ?? 0;
+    final lastMode = prefs.getBool('discreteIsSelectionMode') ?? false;
     final seqKey = 'labelingSequence_${doc}_$iters';
     final savedSeq = prefs.getString(seqKey);
     if (savedSeq == null) {
@@ -328,12 +357,20 @@ class _LabelScreenState extends State<LabelScreen> {
     }
     final total = _sequence.length;
     final doc = context.watch<DoctorProvider>().name;
+    final iters = context.watch<DoctorProvider>().iterations;
+    final sessionId = '${doc}_$iters';
     final img = _sequence[idx].fileName;
     final iteration = _sequence[idx].iteration;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('[$doc] ${idx + 1}/$total'),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('[$doc] ${idx + 1}/$total'),
+            Text('Session: $sessionId', style: const TextStyle(fontSize: 13)),
+          ],
+        ),
         actions: [
           // ← New Preview button
           IconButton(
@@ -405,6 +442,20 @@ class _LabelScreenState extends State<LabelScreen> {
                   ),
                 );
               }
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Logout',
+            onPressed: () async {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.remove('currentUser');
+              await prefs.remove('currentIterations');
+              Navigator.pushNamedAndRemoveUntil(
+                context,
+                '/login',
+                (route) => false,
+              );
             },
           ),
         ],
@@ -484,6 +535,7 @@ class _LabelScreenState extends State<LabelScreen> {
                           fileName: img,
                           iteration: iteration,
                           mode: 'discrete',
+                          sessionId: sessionId,
                         ),
                         if (_showRegionSavedMsg)
                           Positioned(
@@ -568,8 +620,13 @@ class _LabelScreenState extends State<LabelScreen> {
                                 setState(() {
                                   idx--;
                                 });
+                                final doc = context.read<DoctorProvider>().name;
+                                final iters = context
+                                    .read<DoctorProvider>()
+                                    .iterations;
+                                final idxKey = 'lastDiscreteIdx_${doc}_$iters';
                                 SharedPreferences.getInstance().then((prefs) {
-                                  prefs.setInt('lastDiscreteIdx', idx);
+                                  prefs.setInt(idxKey, idx);
                                 });
                                 _loadEvent();
                               }

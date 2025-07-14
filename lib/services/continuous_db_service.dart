@@ -14,6 +14,7 @@ class ContinuousLabelEvent {
   final double percentA;
   final String colorB;
   final double percentB;
+  final String sessionId;
 
   ContinuousLabelEvent({
     this.id,
@@ -26,6 +27,7 @@ class ContinuousLabelEvent {
     required this.percentA,
     required this.colorB,
     required this.percentB,
+    required this.sessionId,
   });
 
   Map<String, dynamic> toMap() => {
@@ -39,6 +41,7 @@ class ContinuousLabelEvent {
     'percentA': percentA,
     'colorB': colorB,
     'percentB': percentB,
+    'sessionId': sessionId,
   };
 
   factory ContinuousLabelEvent.fromMap(Map<String, dynamic> m) =>
@@ -53,6 +56,7 @@ class ContinuousLabelEvent {
         percentA: (m['percentA'] as num).toDouble(),
         colorB: m['colorB'] as String,
         percentB: (m['percentB'] as num).toDouble(),
+        sessionId: m['sessionId'] as String? ?? '',
       );
 }
 
@@ -65,7 +69,7 @@ class ContinuousDbService {
     final dbPath = join(documentsDir.path, 'continuous_mode.db');
     _db = await openDatabase(
       dbPath,
-      version: 1,
+      version: 2, // Bump version to add sessionId columns
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE events (
@@ -78,7 +82,8 @@ class ContinuousDbService {
             colorA     TEXT NOT NULL,
             percentA   REAL NOT NULL,
             colorB     TEXT NOT NULL,
-            percentB   REAL NOT NULL
+            percentB   REAL NOT NULL,
+            sessionId  TEXT NOT NULL DEFAULT ''
           )
         ''');
         await db.execute('''
@@ -89,9 +94,23 @@ class ContinuousDbService {
             pathJson   TEXT NOT NULL,
             iteration  INTEGER NOT NULL,
             timestamp  TEXT NOT NULL,
-            ambientLux INTEGER
+            ambientLux INTEGER,
+            sessionId  TEXT NOT NULL DEFAULT ''
           )
         ''');
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          // Add sessionId column to existing tables
+          await db.execute('''
+            ALTER TABLE events
+            ADD COLUMN sessionId TEXT NOT NULL DEFAULT ''
+          ''');
+          await db.execute('''
+            ALTER TABLE regions
+            ADD COLUMN sessionId TEXT NOT NULL DEFAULT ''
+          ''');
+        }
       },
     );
     return _db!;
@@ -112,9 +131,20 @@ class ContinuousDbService {
     await database.update('events', map, where: 'id = ?', whereArgs: [id]);
   }
 
-  static Future<List<ContinuousLabelEvent>> fetchEvents() async {
+  static Future<List<ContinuousLabelEvent>> fetchEvents({
+    String? sessionId,
+  }) async {
     final database = await db;
-    final rows = await database.query('events');
+    List<Map<String, dynamic>> rows;
+    if (sessionId != null) {
+      rows = await database.query(
+        'events',
+        where: 'sessionId = ?',
+        whereArgs: [sessionId],
+      );
+    } else {
+      rows = await database.query('events');
+    }
     return rows.map((r) => ContinuousLabelEvent.fromMap(r)).toList();
   }
 
@@ -124,13 +154,14 @@ class ContinuousDbService {
     required int iteration,
     required String colorA,
     required String colorB,
+    required String sessionId,
   }) async {
     final database = await db;
     await database.delete(
       'events',
       where:
-          'doctorName = ? AND fileName = ? AND iteration = ? AND colorA = ? AND colorB = ?',
-      whereArgs: [doctorName, fileName, iteration, colorA, colorB],
+          'doctorName = ? AND fileName = ? AND iteration = ? AND colorA = ? AND colorB = ? AND sessionId = ?',
+      whereArgs: [doctorName, fileName, iteration, colorA, colorB, sessionId],
     );
   }
 
@@ -138,13 +169,15 @@ class ContinuousDbService {
     required String doctorName,
     required String fileName,
     required int iteration,
+    required String sessionId,
   }) async {
     final database = await db;
     await database.transaction((txn) async {
       await txn.delete(
         'events',
-        where: 'doctorName = ? AND fileName = ? AND iteration = ?',
-        whereArgs: [doctorName, fileName, iteration],
+        where:
+            'doctorName = ? AND fileName = ? AND iteration = ? AND sessionId = ?',
+        whereArgs: [doctorName, fileName, iteration, sessionId],
       );
     });
   }
@@ -165,12 +198,14 @@ class ContinuousDbService {
     required String doctorName,
     required String fileName,
     required int iteration,
+    required String sessionId,
   }) async {
     final database = await db;
     final rows = await database.query(
       'regions',
-      where: 'doctorName = ? AND fileName = ? AND iteration = ?',
-      whereArgs: [doctorName, fileName, iteration],
+      where:
+          'doctorName = ? AND fileName = ? AND iteration = ? AND sessionId = ?',
+      whereArgs: [doctorName, fileName, iteration, sessionId],
       orderBy: 'timestamp DESC',
       limit: 1,
     );

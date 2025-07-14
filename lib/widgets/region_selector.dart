@@ -21,6 +21,7 @@ class RegionSelector extends StatefulWidget {
   final String fileName;
   final int iteration;
   final String mode; // 'discrete' or 'continuous'
+  final String sessionId;
 
   const RegionSelector({
     super.key,
@@ -34,6 +35,7 @@ class RegionSelector extends StatefulWidget {
     required this.fileName,
     required this.iteration,
     this.mode = 'discrete',
+    required this.sessionId,
   });
 
   @override
@@ -128,12 +130,14 @@ class RegionSelectorState extends State<RegionSelector> {
         doctorName: widget.doctorName,
         fileName: widget.fileName,
         iteration: widget.iteration,
+        sessionId: widget.sessionId,
       );
     } else {
       DiscreteDbService.deleteLastRegion(
         doctorName: widget.doctorName,
         fileName: widget.fileName,
         iteration: widget.iteration,
+        sessionId: widget.sessionId,
       );
     }
     return true;

@@ -13,6 +13,7 @@ class LabelEvent {
   final int iteration;
   final DateTime timestamp;
   final int? ambientLux;
+  final String sessionId;
 
   LabelEvent({
     this.id,
@@ -22,6 +23,7 @@ class LabelEvent {
     required this.iteration,
     required this.timestamp,
     this.ambientLux,
+    required this.sessionId,
   });
 
   Map<String, dynamic> toMap() => {
@@ -32,6 +34,7 @@ class LabelEvent {
     'iteration': iteration,
     'timestamp': timestamp.toIso8601String(),
     'ambientLux': ambientLux,
+    'sessionId': sessionId,
   };
 
   factory LabelEvent.fromMap(Map<String, dynamic> m) => LabelEvent(
@@ -42,6 +45,7 @@ class LabelEvent {
     iteration: m['iteration'] as int,
     timestamp: DateTime.parse(m['timestamp'] as String),
     ambientLux: m['ambientLux'] as int?,
+    sessionId: m['sessionId'] as String? ?? '',
   );
 }
 
@@ -54,6 +58,7 @@ class RegionSelection {
   final int iteration;
   final DateTime timestamp;
   final int? ambientLux;
+  final String sessionId;
 
   RegionSelection({
     this.id,
@@ -63,6 +68,7 @@ class RegionSelection {
     required this.iteration,
     required this.timestamp,
     this.ambientLux,
+    required this.sessionId,
   });
 
   Map<String, dynamic> toMap() => {
@@ -73,6 +79,7 @@ class RegionSelection {
     'iteration': iteration,
     'timestamp': timestamp.toIso8601String(),
     'ambientLux': ambientLux,
+    'sessionId': sessionId,
   };
 
   factory RegionSelection.fromMap(Map<String, dynamic> m) => RegionSelection(
@@ -83,6 +90,7 @@ class RegionSelection {
     iteration: m['iteration'] as int,
     timestamp: DateTime.parse(m['timestamp'] as String),
     ambientLux: m['ambientLux'] as int?,
+    sessionId: m['sessionId'] as String? ?? '',
   );
 }
 
@@ -109,7 +117,8 @@ class DbService {
             color      TEXT NOT NULL,
             iteration  INTEGER NOT NULL,
             timestamp  TEXT NOT NULL,
-            ambientLux INTEGER
+            ambientLux INTEGER,
+            sessionId  TEXT NOT NULL
           )
         ''');
         await db.execute('''
@@ -120,7 +129,8 @@ class DbService {
             pathJson   TEXT NOT NULL,
             iteration  INTEGER NOT NULL,
             timestamp  TEXT NOT NULL,
-            ambientLux INTEGER
+            ambientLux INTEGER,
+            sessionId  TEXT NOT NULL
           )
         ''');
       },
@@ -136,6 +146,15 @@ class DbService {
             ADD COLUMN iteration INTEGER NOT NULL DEFAULT 1
           ''');
         }
+        // Add sessionId column if not present
+        await db.execute('''
+          ALTER TABLE events
+          ADD COLUMN sessionId TEXT NOT NULL DEFAULT ''
+        ''');
+        await db.execute('''
+          ALTER TABLE regions
+          ADD COLUMN sessionId TEXT NOT NULL DEFAULT ''
+        ''');
       },
     );
 

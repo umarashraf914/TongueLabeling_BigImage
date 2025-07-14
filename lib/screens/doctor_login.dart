@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/doctor_provider.dart';
 import 'mode_selection_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class DoctorLogin extends StatefulWidget {
   const DoctorLogin({super.key});
@@ -12,6 +13,27 @@ class DoctorLogin extends StatefulWidget {
 class _DoctorLoginState extends State<DoctorLogin> {
   final TextEditingController _nameCtrl = TextEditingController();
   int _iters = 1;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkAutoLogin();
+  }
+
+  Future<void> _checkAutoLogin() async {
+    final prefs = await SharedPreferences.getInstance();
+    final user = prefs.getString('currentUser');
+    final iters = prefs.getInt('currentIterations');
+    if (user != null && iters != null) {
+      final prov = context.read<DoctorProvider>();
+      prov.name = user;
+      prov.iterations = iters;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const ModeSelectionScreen()),
+      );
+    }
+  }
 
   @override
   void dispose() {
@@ -55,12 +77,15 @@ class _DoctorLoginState extends State<DoctorLogin> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () {
+                onPressed: () async {
                   final name = _nameCtrl.text.trim();
                   if (name.isEmpty) return;
                   final prov = context.read<DoctorProvider>();
                   prov.name = name;
                   prov.iterations = _iters;
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setString('currentUser', name);
+                  await prefs.setInt('currentIterations', _iters);
                   Navigator.pushReplacement(
                     context,
                     MaterialPageRoute(

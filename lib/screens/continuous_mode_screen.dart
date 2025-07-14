@@ -9,6 +9,7 @@ import 'database_view.dart' show ContinuousDatabaseViewScreen;
 import 'dart:convert';
 import '../services/db_service.dart' show RegionSelection;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:math';
 
 class ContinuousModeScreen extends StatefulWidget {
   const ContinuousModeScreen({super.key});
@@ -46,13 +47,14 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
 
   Future<void> _loadLastIndexAndEvent() async {
     final prefs = await SharedPreferences.getInstance();
-    final lastIdx = prefs.getInt('lastContinuousIdx') ?? 0;
-    final lastMode = prefs.getBool('continuousIsSelectionMode') ?? false;
     final doc = Provider.of<DoctorProvider>(context, listen: false).name;
     final iters = Provider.of<DoctorProvider>(
       context,
       listen: false,
     ).iterations;
+    final idxKey = 'lastContinuousIdx_${doc}_$iters';
+    final lastIdx = prefs.getInt(idxKey) ?? 0;
+    final lastMode = prefs.getBool('continuousIsSelectionMode') ?? false;
     final seqKey = 'labelingSequence_${doc}_$iters';
     final savedSeq = prefs.getString(seqKey);
     if (savedSeq == null) {
@@ -90,12 +92,14 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
           .map((e) => ImageIteration(e['fileName'], e['iteration']))
           .toList();
     } else {
-      // Generate and shuffle new sequence, then save
+      // Shuffle base list ONCE with fixed seed
+      final shuffled = List<String>.from(base);
+      shuffled.shuffle(Random(42));
+      // Repeat for each iteration, grouping by pass
       final seq = [
         for (var n = 1; n <= iters; n++)
-          for (var img in base) ImageIteration(img, n),
+          for (var img in shuffled) ImageIteration(img, n),
       ];
-      seq.shuffle();
       _sequence = seq;
       final toSave = _sequence
           .map((e) => {'fileName': e.fileName, 'iteration': e.iteration})
@@ -106,6 +110,11 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
 
   Future<void> _loadEvent() async {
     final doc = Provider.of<DoctorProvider>(context, listen: false).name;
+    final iters = Provider.of<DoctorProvider>(
+      context,
+      listen: false,
+    ).iterations;
+    final sessionId = '${doc}_${iters}';
     final img = _sequence[idx].fileName;
     final iteration = _sequence[idx].iteration;
     // Load regions
@@ -113,19 +122,21 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
     final currentImageRegions = regions
         .where(
           (r) =>
-              r.doctorName == doc &&
+              r.sessionId == sessionId &&
               r.fileName == img &&
               r.iteration == iteration,
         )
         .toList();
-    _regionKey.currentState?.loadExistingRegions(currentImageRegions);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _regionKey.currentState?.loadExistingRegions(currentImageRegions);
+    });
     // No need to update _loadedRegions
     // Load last color event
     final events = await ContinuousDbService.fetchEvents();
     final matchingEvents = events
         .where(
           (e) =>
-              e.doctorName == doc &&
+              e.sessionId == sessionId &&
               e.fileName == img &&
               e.iteration == iteration,
         )
@@ -172,6 +183,11 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
 
   Future<void> _saveOrUpdateColorEvent(int sliderIdx, double value) async {
     final doc = Provider.of<DoctorProvider>(context, listen: false).name;
+    final iters = Provider.of<DoctorProvider>(
+      context,
+      listen: false,
+    ).iterations;
+    final sessionId = '${doc}_${iters}';
     final img = _sequence[this.idx].fileName;
     final iteration = _sequence[this.idx].iteration;
     // Delete all previous events for this image/iteration
@@ -179,6 +195,7 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
       doctorName: doc,
       fileName: img,
       iteration: iteration,
+      sessionId: sessionId,
     );
     String colorA = '', colorB = '';
     if (sliderIdx == 0) {
@@ -201,6 +218,7 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
       percentA: 100 - (value * 100),
       colorB: colorB,
       percentB: value * 100,
+      sessionId: sessionId,
     );
     await ContinuousDbService.insertEvent(event);
   }
@@ -222,13 +240,18 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
       final hasColor = _selectedSlider != null;
       // Check if at least one region exists
       final doc = Provider.of<DoctorProvider>(context, listen: false).name;
+      final iters = Provider.of<DoctorProvider>(
+        context,
+        listen: false,
+      ).iterations;
+      final sessionId = '${doc}_${iters}';
       final img = _sequence[idx].fileName;
       final iteration = _sequence[idx].iteration;
       final regions = await ContinuousDbService.fetchRegions();
       final currentImageRegions = regions
           .where(
             (r) =>
-                r.doctorName == doc &&
+                r.sessionId == sessionId &&
                 r.fileName == img &&
                 r.iteration == iteration,
           )
@@ -264,8 +287,15 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
         _sliderValue1 = 0.0;
         _sliderValue2 = 0.0;
       });
+      final doc = Provider.of<DoctorProvider>(context, listen: false).name;
+      final iters = Provider.of<DoctorProvider>(
+        context,
+        listen: false,
+      ).iterations;
+      final sessionId = '${doc}_${iters}';
+      final idxKey = 'lastContinuousIdx_${doc}_$iters';
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt('lastContinuousIdx', idx);
+      await prefs.setInt(idxKey, idx);
       _loadEvent();
     }
   }
@@ -287,6 +317,11 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
   void _handleRegionComplete(List<Offset> poly) async {
     if (!_isSelectionMode || poly.isEmpty) return;
     final doc = Provider.of<DoctorProvider>(context, listen: false).name;
+    final iters = Provider.of<DoctorProvider>(
+      context,
+      listen: false,
+    ).iterations;
+    final sessionId = '${doc}_${iters}';
     final jsonPoly = jsonEncode(
       poly.map((o) => {'x': o.dx, 'y': o.dy}).toList(),
     );
@@ -298,6 +333,7 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
         iteration: _sequence[idx].iteration,
         timestamp: DateTime.now(),
         ambientLux: null,
+        sessionId: sessionId,
       ),
     );
     await _loadEvent(); // reload regions
@@ -324,9 +360,21 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
     }
     final total = _sequence.length;
     final img = _sequence[idx].fileName;
+    final doc = Provider.of<DoctorProvider>(context, listen: false).name;
+    final iters = Provider.of<DoctorProvider>(
+      context,
+      listen: false,
+    ).iterations;
+    final sessionId = '${doc}_${iters}';
     return Scaffold(
       appBar: AppBar(
-        title: Text('[Continuous] ${idx + 1}/$total'),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('[Continuous]  ${idx + 1}/$total'),
+            Text('Session: $sessionId', style: const TextStyle(fontSize: 13)),
+          ],
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.visibility),
@@ -415,6 +463,20 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
                   );
                 }
               }
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Logout',
+            onPressed: () async {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.remove('currentUser');
+              await prefs.remove('currentIterations');
+              Navigator.pushNamedAndRemoveUntil(
+                context,
+                '/login',
+                (route) => false,
+              );
             },
           ),
         ],
@@ -512,6 +574,7 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
                                   fileName: img,
                                   iteration: _sequence[idx].iteration,
                                   mode: 'continuous',
+                                  sessionId: sessionId,
                                 ),
                                 if (_showRegionSavedMsg)
                                   Positioned(
@@ -579,8 +642,18 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
                               _sliderValue1 = 0.0;
                               _sliderValue2 = 0.0;
                             });
+                            final doc = Provider.of<DoctorProvider>(
+                              context,
+                              listen: false,
+                            ).name;
+                            final iters = Provider.of<DoctorProvider>(
+                              context,
+                              listen: false,
+                            ).iterations;
+                            final sessionId = '${doc}_${iters}';
+                            final idxKey = 'lastContinuousIdx_${doc}_$iters';
                             final prefs = await SharedPreferences.getInstance();
-                            await prefs.setInt('lastContinuousIdx', idx);
+                            await prefs.setInt(idxKey, idx);
                             _loadEvent();
                           }
                         : null,
@@ -697,6 +770,11 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
                     context,
                     listen: false,
                   ).name;
+                  final iters = Provider.of<DoctorProvider>(
+                    context,
+                    listen: false,
+                  ).iterations;
+                  final sessionId = '${doc}_${iters}';
                   final img = _sequence[idx].fileName;
                   final iteration = _sequence[idx].iteration;
                   setState(() {
@@ -710,6 +788,7 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
                     iteration: iteration,
                     colorA: prevColorA,
                     colorB: prevColorB,
+                    sessionId: sessionId,
                   );
                 }
                 setState(() {

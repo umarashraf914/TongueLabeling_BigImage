@@ -4,11 +4,13 @@ import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
 
 import 'services/db_service.dart';
+import 'services/continuous_db_service.dart';
+import 'services/discrete_db_service.dart';
 import 'providers/doctor_provider.dart';
 import 'screens/doctor_login.dart';
 import 'screens/label_screen.dart';
 import 'screens/database_view.dart';
-import 'screens/mode_selection_screen.dart';
+
 import 'screens/continuous_mode_screen.dart';
 
 void main() async {
@@ -18,6 +20,8 @@ void main() async {
     DeviceOrientation.landscapeRight,
   ]);
   await DbService.db;
+  await ContinuousDbService.db;
+  await DiscreteDbService.db;
   runApp(const MyApp());
 }
 
