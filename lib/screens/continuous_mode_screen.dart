@@ -375,6 +375,81 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
             Text('Session: $sessionId', style: const TextStyle(fontSize: 13)),
           ],
         ),
+        centerTitle: false,
+        flexibleSpace: Center(
+          child: Padding(
+            padding: const EdgeInsets.only(
+              top: 38.0,
+            ), // adjust as needed for vertical alignment
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.touch_app, size: 18),
+                const SizedBox(width: 6),
+                const Text(
+                  'Selection Mode',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+                const SizedBox(width: 10),
+                SizedBox(
+                  height: 28,
+                  child: ElevatedButton.icon(
+                    icon: Icon(
+                      _isSelectionMode ? Icons.visibility : Icons.touch_app,
+                      size: 16,
+                    ),
+                    label: Text(
+                      _isSelectionMode ? 'View' : 'Select',
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 0,
+                      ),
+                      minimumSize: const Size(0, 28),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    onPressed: () async {
+                      setState(() {
+                        _isSelectionMode = !_isSelectionMode;
+                        if (!_isSelectionMode) {
+                          _regionKey.currentState?.clearSelection();
+                        }
+                      });
+                      final prefs = await SharedPreferences.getInstance();
+                      await prefs.setBool(
+                        'continuousIsSelectionMode',
+                        _isSelectionMode,
+                      );
+                    },
+                  ),
+                ),
+                if (_isSelectionMode) ...[
+                  const SizedBox(width: 6),
+                  SizedBox(
+                    height: 28,
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.undo, size: 16),
+                      label: const Text('Undo', style: TextStyle(fontSize: 13)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.orange[300],
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 0,
+                        ),
+                        minimumSize: const Size(0, 28),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      onPressed: _undoLastShape,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.visibility),
@@ -484,145 +559,157 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            Container(
-              color: _isSelectionMode ? Colors.orange[100] : Colors.blue[100],
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(_isSelectionMode ? Icons.touch_app : Icons.visibility),
-                  const SizedBox(width: 8),
-                  Text(
-                    _isSelectionMode ? 'Selection Mode' : 'View Mode',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(width: 16),
-                  ElevatedButton.icon(
-                    icon: Icon(
-                      _isSelectionMode ? Icons.visibility : Icons.touch_app,
-                    ),
-                    label: Text(_isSelectionMode ? 'View' : 'Select'),
-                    onPressed: () async {
-                      setState(() {
-                        _isSelectionMode = !_isSelectionMode;
-                        if (!_isSelectionMode) {
-                          _regionKey.currentState?.clearSelection();
-                        }
-                      });
-                      final prefs = await SharedPreferences.getInstance();
-                      await prefs.setBool(
-                        'continuousIsSelectionMode',
-                        _isSelectionMode,
-                      );
-                    },
-                  ),
-                  if (_isSelectionMode) ...[
-                    const SizedBox(width: 8),
-                    ElevatedButton.icon(
-                      icon: const Icon(Icons.undo),
-                      label: const Text('Undo'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.orange[300],
-                      ),
-                      onPressed: _undoLastShape,
-                    ),
-                  ],
-                ],
-              ),
-            ),
+            const SizedBox(height: 25), // Space between AppBar and image
             Expanded(
               child: Center(
-                child: IntrinsicHeight(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      if (_isSelectionMode)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 40.0),
-                          child: _buildSliderBox(),
-                        ),
-                      Center(
-                        child: SizedBox(
-                          width: 320,
-                          child: AspectRatio(
-                            aspectRatio: 3 / 4,
-                            child: Stack(
-                              children: [
-                                RegionSelector(
-                                  key: _regionKey,
-                                  enabled: _isSelectionMode,
-                                  imagePath: img,
-                                  onComplete: _handleRegionComplete,
-                                  onOverlapDetected: () {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                          'Cannot select overlapping areas. Please select a different region.',
-                                        ),
-                                        duration: Duration(seconds: 2),
-                                        backgroundColor: Colors.orange,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 320,
+                      child: AspectRatio(
+                        aspectRatio: 3 / 4,
+                        child: Stack(
+                          children: [
+                            RegionSelector(
+                              key: _regionKey,
+                              enabled: _isSelectionMode,
+                              imagePath: img,
+                              onComplete: _handleRegionComplete,
+                              onOverlapDetected: () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Cannot select overlapping areas. Please select a different region.',
+                                    ),
+                                    duration: Duration(seconds: 2),
+                                    backgroundColor: Colors.orange,
+                                  ),
+                                );
+                              }, // match discrete mode
+                              samplingTolerance: 6.0,
+                              child: Image.asset(img),
+                              doctorName: Provider.of<DoctorProvider>(
+                                context,
+                                listen: false,
+                              ).name,
+                              fileName: img,
+                              iteration: _sequence[idx].iteration,
+                              mode: 'continuous',
+                              sessionId: sessionId,
+                            ),
+                            if (_showRegionSavedMsg)
+                              Positioned(
+                                left: 0,
+                                right: 0,
+                                bottom: 12,
+                                child: AnimatedOpacity(
+                                  opacity: _showRegionSavedMsg ? 1.0 : 0.0,
+                                  duration: const Duration(milliseconds: 300),
+                                  child: Center(
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 6,
+                                        horizontal: 16,
                                       ),
-                                    );
-                                  }, // match discrete mode
-                                  samplingTolerance: 6.0,
-                                  child: Image.asset(img),
-                                  doctorName: Provider.of<DoctorProvider>(
-                                    context,
-                                    listen: false,
-                                  ).name,
-                                  fileName: img,
-                                  iteration: _sequence[idx].iteration,
-                                  mode: 'continuous',
-                                  sessionId: sessionId,
-                                ),
-                                if (_showRegionSavedMsg)
-                                  Positioned(
-                                    left: 0,
-                                    right: 0,
-                                    bottom: 12,
-                                    child: AnimatedOpacity(
-                                      opacity: _showRegionSavedMsg ? 1.0 : 0.0,
-                                      duration: const Duration(
-                                        milliseconds: 300,
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withOpacity(0.7),
+                                        borderRadius: BorderRadius.circular(16),
                                       ),
-                                      child: Center(
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            vertical: 6,
-                                            horizontal: 16,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: Colors.black.withOpacity(
-                                              0.7,
-                                            ),
-                                            borderRadius: BorderRadius.circular(
-                                              16,
-                                            ),
-                                          ),
-                                          child: const Text(
-                                            'Region saved!',
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 14,
-                                            ),
-                                          ),
+                                      child: const Text(
+                                        'Region saved!',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 14,
                                         ),
                                       ),
                                     ),
                                   ),
-                              ],
-                            ),
-                          ),
+                                ),
+                              ),
+                          ],
                         ),
                       ),
-                      if (_isSelectionMode)
-                        Padding(
-                          padding: const EdgeInsets.only(left: 40.0),
-                          child: _buildSliderPercentagesCard(),
-                        ),
+                    ),
+                    const SizedBox(
+                      height: 25,
+                    ), // Space between image and sliders
+                    if (_isSelectionMode) ...[
+                      // Three sliders in a horizontal row below the image, each in its own card
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Card(
+                            elevation: 8,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                            child: SizedBox(
+                              width: 220,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 6,
+                                  horizontal: 6,
+                                ),
+                                child: _buildStyledSlider(
+                                  0,
+                                  'Pale',
+                                  'Pink',
+                                  labelFontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 20),
+                          Card(
+                            elevation: 8,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                            child: SizedBox(
+                              width: 220,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 6,
+                                  horizontal: 6,
+                                ),
+                                child: _buildStyledSlider(
+                                  1,
+                                  'Pink',
+                                  'Red',
+                                  labelFontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 20),
+                          Card(
+                            elevation: 8,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                            child: SizedBox(
+                              width: 220,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 6,
+                                  horizontal: 6,
+                                ),
+                                child: _buildStyledSlider(
+                                  2,
+                                  'Red',
+                                  'DeepRed',
+                                  labelFontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
                     ],
-                  ),
+                  ],
                 ),
               ),
             ),
@@ -683,127 +770,240 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
   }
 
   Widget _buildSliderBox() {
-    return Card(
-      elevation: 10,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      color: Colors.white,
-      child: SizedBox(
-        width: 200,
-        height: 300,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _buildStyledSlider(0, 'Pale', 'Pink'),
-              SizedBox(height: 12),
-              _buildStyledSlider(1, 'Pink', 'Red'),
-              SizedBox(height: 12),
-              _buildStyledSlider(2, 'Red', 'DeepRed'),
-            ],
-          ),
-        ),
-      ),
-    );
+    // No longer used in new layout
+    return const SizedBox.shrink();
   }
 
-  Widget _buildStyledSlider(int idx, String left, String right) {
+  // Widget _buildStyledSlider(
+  //   int idx,
+  //   String left,
+  //   String right, {
+  //   double labelFontSize = 14,
+  // }) {
+  //   final isActive = _selectedSlider == idx;
+  //   double value = 0.0;
+  //   if (idx == 0) value = _sliderValue0;
+  //   if (idx == 1) value = _sliderValue1;
+  //   if (idx == 2) value = _sliderValue2;
+  //   return Column(
+  //     crossAxisAlignment: CrossAxisAlignment.stretch,
+  //     children: [
+  //       Row(
+  //         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  //         children: [
+  //           Text(
+  //             left,
+  //             style: TextStyle(
+  //               fontWeight: FontWeight.bold,
+  //               fontSize: labelFontSize,
+  //             ),
+  //           ),
+  //           Text(
+  //             right,
+  //             style: TextStyle(
+  //               fontWeight: FontWeight.bold,
+  //               fontSize: labelFontSize,
+  //             ),
+  //           ),
+  //         ],
+  //       ),
+  //       GestureDetector(
+  //         behavior: HitTestBehavior.translucent,
+  //         onTap: () {
+  //           setState(() {
+  //             _selectedSlider = idx;
+  //           });
+  //         },
+  //         child: SliderTheme(
+  //           data: SliderTheme.of(context).copyWith(
+  //             activeTrackColor: isActive ? Colors.deepPurple : Colors.grey[300],
+  //             inactiveTrackColor: Colors.grey[200],
+  //             trackHeight: 6.0,
+  //             thumbColor: isActive ? Colors.pink : Colors.grey[400],
+  //             thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12),
+  //             overlayColor: isActive
+  //                 ? Colors.pink.withOpacity(0.2)
+  //                 : Colors.transparent,
+  //             valueIndicatorColor: Colors.deepPurple,
+  //           ),
+  //           child: Slider(
+  //             value: value,
+  //             onChanged: isActive
+  //                 ? (v) {
+  //                     setState(() {
+  //                       if (idx == 0) _sliderValue0 = v;
+  //                       if (idx == 1) _sliderValue1 = v;
+  //                       if (idx == 2) _sliderValue2 = v;
+  //                     });
+  //                   }
+  //                 : null,
+  //             onChangeStart: (_) async {
+  //               if (!isActive && _selectedSlider != null) {
+  //                 String prevColorA = '', prevColorB = '';
+  //                 if (_selectedSlider == 0) {
+  //                   prevColorA = 'Pale';
+  //                   prevColorB = 'Pink';
+  //                 } else if (_selectedSlider == 1) {
+  //                   prevColorA = 'Pink';
+  //                   prevColorB = 'Red';
+  //                 } else if (_selectedSlider == 2) {
+  //                   prevColorA = 'Red';
+  //                   prevColorB = 'DeepRed';
+  //                 }
+  //                 final doc = Provider.of<DoctorProvider>(
+  //                   context,
+  //                   listen: false,
+  //                 ).name;
+  //                 final iters = Provider.of<DoctorProvider>(
+  //                   context,
+  //                   listen: false,
+  //                 ).iterations;
+  //                 final sessionId = '${doc}_${iters}';
+  //                 final img = _sequence[idx].fileName;
+  //                 final iteration = _sequence[idx].iteration;
+  //                 setState(() {
+  //                   if (_selectedSlider == 0) _sliderValue0 = 0.0;
+  //                   if (_selectedSlider == 1) _sliderValue1 = 0.0;
+  //                   if (_selectedSlider == 2) _sliderValue2 = 0.0;
+  //                 });
+  //                 await ContinuousDbService.deleteEvent(
+  //                   doctorName: doc,
+  //                   fileName: img,
+  //                   iteration: iteration,
+  //                   colorA: prevColorA,
+  //                   colorB: prevColorB,
+  //                   sessionId: sessionId,
+  //                 );
+  //               }
+  //               setState(() {
+  //                 _selectedSlider = idx;
+  //               });
+  //             },
+  //             onChangeEnd: isActive
+  //                 ? (v) async {
+  //                     await _saveOrUpdateColorEvent(idx, v);
+  //                   }
+  //                 : null,
+  //             min: 0.0,
+  //             max: 1.0,
+  //             divisions: 100,
+  //           ),
+  //         ),
+  //       ),
+  //     ],
+  //   );
+  // }
+  Widget _buildStyledSlider(
+    int idx,
+    String left,
+    String right, {
+    double labelFontSize = 14,
+  }) {
     final isActive = _selectedSlider == idx;
     double value = 0.0;
     if (idx == 0) value = _sliderValue0;
     if (idx == 1) value = _sliderValue1;
     if (idx == 2) value = _sliderValue2;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(left, style: TextStyle(fontWeight: FontWeight.bold)),
-            Text(right, style: TextStyle(fontWeight: FontWeight.bold)),
+            Text(
+              left,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: labelFontSize,
+              ),
+            ),
+            Text(
+              right,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: labelFontSize,
+              ),
+            ),
           ],
         ),
-        GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          onTap: () {
-            setState(() {
-              _selectedSlider = idx;
-            });
-          },
-          child: SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              activeTrackColor: isActive ? Colors.deepPurple : Colors.grey[300],
-              inactiveTrackColor: Colors.grey[200],
-              trackHeight: 6.0,
-              thumbColor: isActive ? Colors.pink : Colors.grey[400],
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12),
-              overlayColor: isActive
-                  ? Colors.pink.withOpacity(0.2)
-                  : Colors.transparent,
-              valueIndicatorColor: Colors.deepPurple,
-            ),
-            child: Slider(
-              value: value,
-              onChanged: isActive
-                  ? (v) {
-                      setState(() {
-                        if (idx == 0) _sliderValue0 = v;
-                        if (idx == 1) _sliderValue1 = v;
-                        if (idx == 2) _sliderValue2 = v;
-                      });
-                    }
-                  : null,
-              onChangeStart: (_) async {
-                if (!isActive && _selectedSlider != null) {
-                  String prevColorA = '', prevColorB = '';
-                  if (_selectedSlider == 0) {
-                    prevColorA = 'Pale';
-                    prevColorB = 'Pink';
-                  } else if (_selectedSlider == 1) {
-                    prevColorA = 'Pink';
-                    prevColorB = 'Red';
-                  } else if (_selectedSlider == 2) {
-                    prevColorA = 'Red';
-                    prevColorB = 'DeepRed';
-                  }
-                  final doc = Provider.of<DoctorProvider>(
-                    context,
-                    listen: false,
-                  ).name;
-                  final iters = Provider.of<DoctorProvider>(
-                    context,
-                    listen: false,
-                  ).iterations;
-                  final sessionId = '${doc}_${iters}';
-                  final img = _sequence[idx].fileName;
-                  final iteration = _sequence[idx].iteration;
-                  setState(() {
-                    if (_selectedSlider == 0) _sliderValue0 = 0.0;
-                    if (_selectedSlider == 1) _sliderValue1 = 0.0;
-                    if (_selectedSlider == 2) _sliderValue2 = 0.0;
-                  });
-                  await ContinuousDbService.deleteEvent(
-                    doctorName: doc,
-                    fileName: img,
-                    iteration: iteration,
-                    colorA: prevColorA,
-                    colorB: prevColorB,
-                    sessionId: sessionId,
-                  );
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            activeTrackColor: isActive ? Colors.deepPurple : Colors.grey[400],
+            inactiveTrackColor: Colors.grey[200],
+            trackHeight: 6.0,
+            thumbColor: isActive ? Colors.pink : Colors.grey[500],
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12),
+            overlayColor: isActive
+                ? Colors.pink.withOpacity(0.2)
+                : Colors.grey.withOpacity(0.1),
+            valueIndicatorColor: Colors.deepPurple,
+          ),
+          child: Slider(
+            value: value,
+            onChanged: (v) {
+              setState(() {
+                if (idx == 0) _sliderValue0 = v;
+                if (idx == 1) _sliderValue1 = v;
+                if (idx == 2) _sliderValue2 = v;
+              });
+            },
+            onChangeStart: (v) async {
+              // Clear previous selection and reset other sliders
+              if (_selectedSlider != null && _selectedSlider != idx) {
+                String prevColorA = '', prevColorB = '';
+                if (_selectedSlider == 0) {
+                  prevColorA = 'Pale';
+                  prevColorB = 'Pink';
+                } else if (_selectedSlider == 1) {
+                  prevColorA = 'Pink';
+                  prevColorB = 'Red';
+                } else if (_selectedSlider == 2) {
+                  prevColorA = 'Red';
+                  prevColorB = 'DeepRed';
                 }
+
+                final doc = Provider.of<DoctorProvider>(
+                  context,
+                  listen: false,
+                ).name;
+                final iters = Provider.of<DoctorProvider>(
+                  context,
+                  listen: false,
+                ).iterations;
+                final sessionId = '${doc}_${iters}';
+                final img = _sequence[this.idx].fileName;
+                final iteration = _sequence[this.idx].iteration;
+
+                // Reset the previous slider value
                 setState(() {
-                  _selectedSlider = idx;
+                  if (_selectedSlider == 0) _sliderValue0 = 0.0;
+                  if (_selectedSlider == 1) _sliderValue1 = 0.0;
+                  if (_selectedSlider == 2) _sliderValue2 = 0.0;
                 });
-              },
-              onChangeEnd: isActive
-                  ? (v) async {
-                      await _saveOrUpdateColorEvent(idx, v);
-                    }
-                  : null,
-              min: 0.0,
-              max: 1.0,
-              divisions: 100,
-            ),
+
+                // Delete previous event from database
+                await ContinuousDbService.deleteEvent(
+                  doctorName: doc,
+                  fileName: img,
+                  iteration: iteration,
+                  colorA: prevColorA,
+                  colorB: prevColorB,
+                  sessionId: sessionId,
+                );
+              }
+
+              // Set current slider as selected
+              setState(() {
+                _selectedSlider = idx;
+              });
+            },
+            onChangeEnd: (v) async {
+              await _saveOrUpdateColorEvent(idx, v);
+            },
+            min: 0.0,
+            max: 1.0,
+            divisions: 100,
           ),
         ),
       ],
@@ -811,102 +1011,8 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
   }
 
   Widget _buildSliderPercentagesCard() {
-    return Card(
-      elevation: 10,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      color: Colors.white,
-      child: SizedBox(
-        width: 240,
-        height: 140,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
-          child: _buildSliderPercentagesCardContent(),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSliderPercentagesCardContent() {
-    if (_selectedSlider == null) {
-      return Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: const [
-          Icon(Icons.info_outline, color: Colors.deepPurple, size: 40),
-          SizedBox(height: 10),
-          Flexible(
-            child: Text(
-              'Please select a color from the sliders.',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w500,
-                color: Colors.black54,
-                letterSpacing: 1.1,
-              ),
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      );
-    }
-    String left = '', right = '';
-    double value = 0.0;
-    switch (_selectedSlider) {
-      case 0:
-        left = 'Pale';
-        right = 'Pink';
-        value = _sliderValue0;
-        break;
-      case 1:
-        left = 'Pink';
-        right = 'Red';
-        value = _sliderValue1;
-        break;
-      case 2:
-        left = 'Red';
-        right = 'DeepRed';
-        value = _sliderValue2;
-        break;
-    }
-    final rightPct = (value * 100).round();
-    final leftPct = 100 - rightPct;
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Flexible(
-          child: Text(
-            '$leftPct% $left',
-            style: const TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: Colors.deepPurple,
-              letterSpacing: 1.2,
-            ),
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-        const SizedBox(height: 10),
-        Flexible(
-          child: Text(
-            '$rightPct% $right',
-            style: const TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: Colors.pink,
-              letterSpacing: 1.2,
-            ),
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
-    );
+    // No longer used in new layout
+    return const SizedBox.shrink();
   }
 }
 
