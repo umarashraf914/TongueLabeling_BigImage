@@ -371,8 +371,86 @@ class _LabelScreenState extends State<LabelScreen> {
             Text('Session: $sessionId', style: const TextStyle(fontSize: 13)),
           ],
         ),
+        centerTitle: false,
+        flexibleSpace: Center(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 38.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  _isSelectionMode ? Icons.touch_app : Icons.visibility,
+                  size: 18,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  _isSelectionMode ? 'Selection Mode' : 'View Mode',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                SizedBox(
+                  height: 28,
+                  child: ElevatedButton.icon(
+                    icon: Icon(
+                      _isSelectionMode ? Icons.visibility : Icons.touch_app,
+                      size: 16,
+                    ),
+                    label: Text(
+                      _isSelectionMode ? 'View' : 'Select',
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 0,
+                      ),
+                      minimumSize: const Size(0, 28),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    onPressed: () async {
+                      setState(() {
+                        _isSelectionMode = !_isSelectionMode;
+                        if (!_isSelectionMode) {
+                          _regionKey.currentState?.clearSelection();
+                        }
+                      });
+                      final prefs = await SharedPreferences.getInstance();
+                      await prefs.setBool(
+                        'discreteIsSelectionMode',
+                        _isSelectionMode,
+                      );
+                    },
+                  ),
+                ),
+                if (_isSelectionMode) ...[
+                  const SizedBox(width: 6),
+                  SizedBox(
+                    height: 28,
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.undo, size: 16),
+                      label: const Text('Undo', style: TextStyle(fontSize: 13)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.orange[300],
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 0,
+                        ),
+                        minimumSize: const Size(0, 28),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      onPressed: _undoLastShape,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
         actions: [
-          // ← New Preview button
           IconButton(
             icon: const Icon(Icons.visibility),
             tooltip: 'Preview Regions',
@@ -390,7 +468,6 @@ class _LabelScreenState extends State<LabelScreen> {
               );
             },
           ),
-
           IconButton(
             icon: const Icon(Icons.storage),
             tooltip: 'View DB',
@@ -463,112 +540,52 @@ class _LabelScreenState extends State<LabelScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Selection / View mode toggle + image/selector
             Expanded(
-              child: Column(
+              child: Stack(
                 children: [
-                  Container(
-                    color: _isSelectionMode
-                        ? Colors.orange[100]
-                        : Colors.blue[100],
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          _isSelectionMode ? Icons.touch_app : Icons.visibility,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          _isSelectionMode ? 'Selection Mode' : 'View Mode',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(width: 16),
-                        ElevatedButton.icon(
-                          icon: Icon(
-                            _isSelectionMode
-                                ? Icons.visibility
-                                : Icons.touch_app,
-                          ),
-                          label: Text(_isSelectionMode ? 'View' : 'Select'),
-                          onPressed: () async {
-                            setState(() {
-                              _isSelectionMode = !_isSelectionMode;
-                              if (!_isSelectionMode) {
-                                _regionKey.currentState?.clearSelection();
-                              }
-                            });
-                            final prefs = await SharedPreferences.getInstance();
-                            await prefs.setBool(
-                              'discreteIsSelectionMode',
-                              _isSelectionMode,
-                            );
-                          },
-                        ),
-                        // NEW: Add the Undo button only in selection mode
-                        if (_isSelectionMode) ...[
-                          const SizedBox(width: 8),
-                          ElevatedButton.icon(
-                            icon: const Icon(Icons.undo),
-                            label: const Text('Undo'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.orange[300],
-                            ),
-                            onPressed: _undoLastShape,
-                          ),
-                        ],
-                      ],
-                    ),
+                  RegionSelector(
+                    key: _regionKey,
+                    enabled: _isSelectionMode,
+                    imagePath: img,
+                    onComplete: _onRegionComplete,
+                    onOverlapDetected: _onOverlapDetected,
+                    samplingTolerance: 6.0,
+                    child: _buildImageWidget(img),
+                    doctorName: doc,
+                    fileName: img,
+                    iteration: iteration,
+                    mode: 'discrete',
+                    sessionId: sessionId,
                   ),
-                  Expanded(
-                    child: Stack(
-                      children: [
-                        RegionSelector(
-                          key: _regionKey,
-                          enabled: _isSelectionMode,
-                          imagePath: img,
-                          onComplete: _onRegionComplete,
-                          onOverlapDetected: _onOverlapDetected,
-                          samplingTolerance: 6.0,
-                          child: _buildImageWidget(img),
-                          doctorName: doc,
-                          fileName: img,
-                          iteration: iteration,
-                          mode: 'discrete',
-                          sessionId: sessionId,
-                        ),
-                        if (_showRegionSavedMsg)
-                          Positioned(
-                            left: 0,
-                            right: 0,
-                            bottom: 12,
-                            child: AnimatedOpacity(
-                              opacity: _showRegionSavedMsg ? 1.0 : 0.0,
-                              duration: const Duration(milliseconds: 300),
-                              child: Center(
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 6,
-                                    horizontal: 16,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withOpacity(0.7),
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  child: const Text(
-                                    'Region saved!',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                ),
+                  if (_showRegionSavedMsg)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 12,
+                      child: AnimatedOpacity(
+                        opacity: _showRegionSavedMsg ? 1.0 : 0.0,
+                        duration: const Duration(milliseconds: 300),
+                        child: Center(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 6,
+                              horizontal: 16,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.7),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: const Text(
+                              'Region saved!',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
                               ),
                             ),
                           ),
-                      ],
+                        ),
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),
