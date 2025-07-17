@@ -10,6 +10,14 @@ import 'dart:convert';
 import '../services/db_service.dart' show RegionSelection;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math';
+import '../widgets/labeling_screen_scaffold.dart';
+import '../widgets/mode_toolbar.dart';
+import '../widgets/user_info_card.dart';
+import '../widgets/appbar_actions_card.dart';
+import '../widgets/navigation_card.dart';
+import '../utils/downloads_path.dart';
+import 'package:intl/intl.dart';
+import 'dart:io';
 
 class ContinuousModeScreen extends StatefulWidget {
   const ContinuousModeScreen({super.key});
@@ -75,7 +83,7 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
   Future<void> _buildSequence() async {
     final base = List.generate(
       2000,
-      (i) => 'assets/images/' + (i + 1).toString().padLeft(4, '0') + '.png',
+      (i) => 'assets/images/${(i + 1).toString().padLeft(4, '0')}.png',
     );
     final iters = Provider.of<DoctorProvider>(
       context,
@@ -114,7 +122,7 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
       context,
       listen: false,
     ).iterations;
-    final sessionId = '${doc}_${iters}';
+    final sessionId = '${doc}_$iters';
     final img = _sequence[idx].fileName;
     final iteration = _sequence[idx].iteration;
     // Load regions
@@ -187,9 +195,9 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
       context,
       listen: false,
     ).iterations;
-    final sessionId = '${doc}_${iters}';
-    final img = _sequence[this.idx].fileName;
-    final iteration = _sequence[this.idx].iteration;
+    final sessionId = '${doc}_$iters';
+    final img = _sequence[idx].fileName;
+    final iteration = _sequence[idx].iteration;
     // Delete all previous events for this image/iteration
     await ContinuousDbService.deleteAllEventsForImage(
       doctorName: doc,
@@ -244,7 +252,7 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
         context,
         listen: false,
       ).iterations;
-      final sessionId = '${doc}_${iters}';
+      final sessionId = '${doc}_$iters';
       final img = _sequence[idx].fileName;
       final iteration = _sequence[idx].iteration;
       final regions = await ContinuousDbService.fetchRegions();
@@ -258,16 +266,16 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
           .toList();
       final hasRegion = currentImageRegions.isNotEmpty;
       if (!hasColor || !hasRegion) {
-        setState(() {
-          _showNextWarning = true;
-        });
-        Future.delayed(const Duration(seconds: 2), () {
-          if (mounted) {
-            setState(() {
-              _showNextWarning = false;
-            });
-          }
-        });
+        // Show warning as SnackBar (orange, like overlap)
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Please select a color and draw at least one region to continue.',
+            ),
+            duration: Duration(seconds: 2),
+            backgroundColor: Colors.orange,
+          ),
+        );
         return;
       }
     }
@@ -292,7 +300,7 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
         context,
         listen: false,
       ).iterations;
-      final sessionId = '${doc}_${iters}';
+      final sessionId = '${doc}_$iters';
       final idxKey = 'lastContinuousIdx_${doc}_$iters';
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt(idxKey, idx);
@@ -321,7 +329,7 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
       context,
       listen: false,
     ).iterations;
-    final sessionId = '${doc}_${iters}';
+    final sessionId = '${doc}_$iters';
     final jsonPoly = jsonEncode(
       poly.map((o) => {'x': o.dx, 'y': o.dy}).toList(),
     );
@@ -365,407 +373,548 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
       context,
       listen: false,
     ).iterations;
-    final sessionId = '${doc}_${iters}';
-    return Scaffold(
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('[Continuous]  ${idx + 1}/$total'),
-            Text('Session: $sessionId', style: const TextStyle(fontSize: 13)),
-          ],
-        ),
-        centerTitle: false,
-        flexibleSpace: Center(
-          child: Padding(
-            padding: const EdgeInsets.only(
-              top: 38.0,
-            ), // adjust as needed for vertical alignment
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.touch_app, size: 18),
-                const SizedBox(width: 6),
-                const Text(
-                  'Selection Mode',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                ),
-                const SizedBox(width: 10),
-                SizedBox(
-                  height: 28,
-                  child: ElevatedButton.icon(
-                    icon: Icon(
-                      _isSelectionMode ? Icons.visibility : Icons.touch_app,
-                      size: 16,
-                    ),
-                    label: Text(
-                      _isSelectionMode ? 'View' : 'Select',
-                      style: const TextStyle(fontSize: 13),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 0,
-                      ),
-                      minimumSize: const Size(0, 28),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    onPressed: () async {
-                      setState(() {
-                        _isSelectionMode = !_isSelectionMode;
-                        if (!_isSelectionMode) {
-                          _regionKey.currentState?.clearSelection();
-                        }
-                      });
-                      final prefs = await SharedPreferences.getInstance();
-                      await prefs.setBool(
-                        'continuousIsSelectionMode',
-                        _isSelectionMode,
-                      );
-                    },
+    final sessionId = '${doc}_$iters';
+    final iteration = _sequence[idx].iteration;
+
+    // RegionSelector widget
+    final regionSelector = RegionSelector(
+      key: _regionKey,
+      enabled: _isSelectionMode,
+      imagePath: img,
+      onComplete: _handleRegionComplete,
+      onOverlapDetected: () {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Cannot select overlapping areas. Please select a different region.',
+            ),
+            duration: Duration(seconds: 2),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      },
+      samplingTolerance: 6.0,
+      doctorName: doc,
+      fileName: img,
+      iteration: iteration,
+      mode: 'continuous',
+      sessionId: sessionId,
+      child: Image.asset(img),
+    );
+
+    // Region saved message
+    final regionSavedMessage = _showRegionSavedMsg
+        ? Positioned(
+            left: 0,
+            right: 0,
+            bottom: 12,
+            child: AnimatedOpacity(
+              opacity: _showRegionSavedMsg ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 300),
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 6,
+                    horizontal: 16,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.7),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Text(
+                    'Region saved!',
+                    style: TextStyle(color: Colors.white, fontSize: 14),
                   ),
                 ),
-                if (_isSelectionMode) ...[
-                  const SizedBox(width: 6),
-                  SizedBox(
-                    height: 28,
-                    child: ElevatedButton.icon(
-                      icon: const Icon(Icons.undo, size: 16),
-                      label: const Text('Undo', style: TextStyle(fontSize: 13)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.orange[300],
+              ),
+            ),
+          )
+        : null;
+
+    // Mode controls (sliders)
+    final modeControls = _isSelectionMode
+        ? Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Card(
+                    elevation: 8,
+                    color: const Color(0xFFF3EFFF),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(32),
+                    ),
+                    child: SizedBox(
+                      width: 300,
+                      height: 28,
+                      child: Padding(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
                           vertical: 0,
+                          horizontal: 4,
                         ),
-                        minimumSize: const Size(0, 28),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        child: _buildStyledSlider(
+                          0,
+                          'Pale',
+                          'Pink',
+                          labelFontSize: 12,
+                          labelColor: Colors.deepPurple,
+                          labelBottomPadding: 0,
+                        ),
                       ),
-                      onPressed: _undoLastShape,
+                    ),
+                  ),
+                  const SizedBox(width: 20),
+                  Card(
+                    elevation: 8,
+                    color: const Color(0xFFF3EFFF),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(32),
+                    ),
+                    child: SizedBox(
+                      width: 300,
+                      height: 28,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 0,
+                          horizontal: 4,
+                        ),
+                        child: _buildStyledSlider(
+                          1,
+                          'Pink',
+                          'Red',
+                          labelFontSize: 12,
+                          labelColor: Colors.deepPurple,
+                          labelBottomPadding: 0,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 20),
+                  Card(
+                    elevation: 8,
+                    color: const Color(0xFFF3EFFF),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(32),
+                    ),
+                    child: SizedBox(
+                      width: 300,
+                      height: 28,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 0,
+                          horizontal: 4,
+                        ),
+                        child: _buildStyledSlider(
+                          2,
+                          'Red',
+                          'DeepRed',
+                          labelFontSize: 12,
+                          labelColor: Colors.deepPurple,
+                          labelBottomPadding: 0,
+                        ),
+                      ),
                     ),
                   ),
                 ],
-              ],
+              ),
+              const SizedBox(height: 16),
+            ],
+          )
+        : const SizedBox.shrink();
+
+    // Navigation buttons
+    final navigationButtons = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          GestureDetector(
+            onTap: idx > 0
+                ? () async {
+                    setState(() {
+                      idx--;
+                      _selectedSlider = null;
+                      _sliderValue0 = 0.0;
+                      _sliderValue1 = 0.0;
+                      _sliderValue2 = 0.0;
+                    });
+                    final doc = Provider.of<DoctorProvider>(
+                      context,
+                      listen: false,
+                    ).name;
+                    final iters = Provider.of<DoctorProvider>(
+                      context,
+                      listen: false,
+                    ).iterations;
+                    final sessionId = '${doc}_$iters';
+                    final idxKey = 'lastContinuousIdx_${doc}_$iters';
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.setInt(idxKey, idx);
+                    _loadEvent();
+                  }
+                : null,
+            child: Card(
+              elevation: 8,
+              color: const Color(0xFFF3EFFF),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(32),
+              ),
+              child: SizedBox(
+                height: 56,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 28),
+                  child: Center(
+                    child: Text(
+                      'Previous',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: idx > 0
+                            ? Colors.deepPurple
+                            : Colors.deepPurple.withOpacity(0.4),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
+          GestureDetector(
+            onTap: () => _handleNext(total),
+            child: Card(
+              elevation: 8,
+              color: const Color(0xFFF3EFFF),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(32),
+              ),
+              child: SizedBox(
+                height: 56,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 28),
+                  child: Center(
+                    child: Text(
+                      'Next',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        color: Colors.deepPurple,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    final appBarContent = Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        // Left: User info card
+        UserInfoCard(
+          userName: doc,
+          iterations: iters,
+          mode: 'continuous',
+          currentIndex: idx,
+          totalImages: total,
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.visibility),
-            tooltip: 'Preview Regions',
-            onPressed: () {
+        const Spacer(),
+        // Center: ModeToolbar
+        ModeToolbar(
+          isSelectionMode: _isSelectionMode,
+          onToggleMode: () async {
+            setState(() {
+              _isSelectionMode = !_isSelectionMode;
+              if (!_isSelectionMode) {
+                _regionKey.currentState?.clearSelection();
+              }
+            });
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setBool('continuousIsSelectionMode', _isSelectionMode);
+          },
+          onUndo: _isSelectionMode ? _undoLastShape : null,
+        ),
+        const Spacer(),
+        // Right: Actions card with 6 icons
+        AppBarActionsCard(
+          onDownload: () async {
+            try {
               final doc = Provider.of<DoctorProvider>(
                 context,
                 listen: false,
               ).name;
-              final iteration = _sequence[idx].iteration;
-              Navigator.push(
+              final iters = Provider.of<DoctorProvider>(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => RegionPreviewScreen(
-                    fileName: img,
-                    doctorName: doc,
-                    iteration: iteration,
-                    mode: 'continuous',
-                  ),
-                ),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.storage),
-            tooltip: 'View DB',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const ContinuousDatabaseViewScreen(),
-              ),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.grid_on),
-            tooltip: 'Switch to Discrete Mode',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const LabelScreen()),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete_forever),
-            tooltip: 'Reset Database',
-            onPressed: () async {
-              final confirmed = await showDialog<bool>(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  title: const Text('Delete all data?'),
-                  content: const Text(
-                    'This will permanently delete all labeling and region data for Continuous mode. Are you sure?',
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.of(ctx).pop(false),
-                      child: const Text('Cancel'),
-                    ),
-                    TextButton(
-                      onPressed: () => Navigator.of(ctx).pop(true),
-                      child: const Text(
-                        'Delete',
-                        style: TextStyle(color: Colors.red),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-              if (confirmed == true) {
-                await ContinuousDbService.clearAllData();
-                if (mounted) {
-                  setState(() {
-                    _sliderValue0 = 0.0;
-                    _sliderValue1 = 0.0;
-                    _sliderValue2 = 0.0;
-                    _selectedSlider = null;
-                    // _loadedRegions = []; // No longer needed
-                  });
-                  _regionKey.currentState?.clearSelection();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Continuous mode database cleared.'),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
+                listen: false,
+              ).iterations;
+              final sessionId = '${doc}_$iters';
+              final events = await ContinuousDbService.fetchEvents();
+              final regions = await ContinuousDbService.fetchRegions();
+              // Group regions by image/iteration
+              Map<String, List<RegionSelection>> regionMap = {};
+              for (var r in regions) {
+                if (r.sessionId == sessionId) {
+                  final key = '${r.fileName}_${r.iteration}';
+                  regionMap.putIfAbsent(key, () => []).add(r);
                 }
               }
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Logout',
-            onPressed: () async {
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.remove('currentUser');
-              await prefs.remove('currentIterations');
-              Navigator.pushNamedAndRemoveUntil(
-                context,
-                '/login',
-                (route) => false,
+              // Prepare CSV rows
+              List<List<String>> rows = [];
+              // Header
+              int maxRegions = regionMap.values.fold(
+                0,
+                (prev, list) => list.length > prev ? list.length : prev,
               );
-            },
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            const SizedBox(height: 25), // Space between AppBar and image
-            Expanded(
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  crossAxisAlignment: CrossAxisAlignment.center,
+              List<String> header = [
+                'Image Name',
+                'Time',
+                'Color A',
+                'Percent A',
+                'Color B',
+                'Percent B',
+              ];
+              for (int i = 0; i < maxRegions; i++) {
+                header.add('Region ${i + 1}');
+              }
+              rows.add(header);
+              // Data rows
+              for (var e in events) {
+                if (e.sessionId != sessionId) continue;
+                final key = '${e.fileName}_${e.iteration}';
+                final regionList = regionMap[key] ?? [];
+                List<String> row = [
+                  e.fileName,
+                  DateFormat('yyyy-MM-dd HH:mm:ss').format(e.timestamp),
+                  e.colorA,
+                  e.percentA.toStringAsFixed(2),
+                  e.colorB,
+                  e.percentB.toStringAsFixed(2),
+                ];
+                for (var r in regionList) {
+                  row.add(r.pathJson);
+                }
+                // Pad with empty strings if fewer regions
+                while (row.length < header.length) {
+                  row.add('');
+                }
+                rows.add(row);
+              }
+              // Convert to CSV string
+              String csv = rows
+                  .map(
+                    (r) =>
+                        r.map((v) => '"${v.replaceAll('"', '""')}"').join(','),
+                  )
+                  .join('\n');
+              // Get Downloads directory
+              final now = DateTime.now();
+              final fileName =
+                  'continuous_${doc}_$sessionId${DateFormat('yyyyMMdd_HHmmss').format(now)}.csv';
+              final downloadsPath = await DownloadsPath.getDownloadsDirectory();
+              if (downloadsPath == null)
+                throw Exception('Downloads directory not found');
+              final file = File('$downloadsPath/$fileName');
+              await file.writeAsString(csv);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Exported to ${file.path}')),
+              );
+            } catch (e) {
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text('Export failed: $e')));
+            }
+          },
+          otherIcons: [
+            IconButton(
+              icon: const Icon(Icons.visibility, color: Colors.deepPurple),
+              tooltip: 'Preview Regions',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => RegionPreviewScreen(
+                      fileName: img,
+                      doctorName: doc,
+                      iteration: iteration,
+                      mode: 'continuous',
+                    ),
+                  ),
+                );
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.storage, color: Colors.deepPurple),
+              tooltip: 'View DB',
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const ContinuousDatabaseViewScreen(),
+                ),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.grid_on, color: Colors.deepPurple),
+              tooltip: 'Switch to Discrete Mode',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LabelScreen()),
+                );
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete_forever, color: Colors.deepPurple),
+              tooltip: 'Reset Database',
+              onPressed: () async {
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Delete all data?'),
+                    content: const Text(
+                      'This will permanently delete all labeling and region data for Continuous mode. Are you sure?',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(ctx).pop(false),
+                        child: const Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.of(ctx).pop(true),
+                        child: const Text(
+                          'Delete',
+                          style: TextStyle(color: Colors.red),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirmed == true) {
+                  await ContinuousDbService.clearAllData();
+                  if (mounted) {
+                    setState(() {
+                      _sliderValue0 = 0.0;
+                      _sliderValue1 = 0.0;
+                      _sliderValue2 = 0.0;
+                      _selectedSlider = null;
+                    });
+                    _regionKey.currentState?.clearSelection();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Continuous mode database cleared.'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  }
+                }
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.logout, color: Colors.deepPurple),
+              tooltip: 'Logout',
+              onPressed: () async {
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.remove('currentUser');
+                await prefs.remove('currentIterations');
+                Navigator.pushNamedAndRemoveUntil(
+                  context,
+                  '/login',
+                  (route) => false,
+                );
+              },
+            ),
+          ],
+        ),
+      ],
+    );
+
+    return LabelingScreenScaffold(
+      appBarContent: appBarContent,
+      regionSelector: regionSelector,
+      regionSavedMessage: regionSavedMessage,
+      modeControls: _isSelectionMode
+          ? Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    SizedBox(
-                      width: 320,
-                      child: AspectRatio(
-                        aspectRatio: 3 / 4,
-                        child: Stack(
-                          children: [
-                            RegionSelector(
-                              key: _regionKey,
-                              enabled: _isSelectionMode,
-                              imagePath: img,
-                              onComplete: _handleRegionComplete,
-                              onOverlapDetected: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'Cannot select overlapping areas. Please select a different region.',
-                                    ),
-                                    duration: Duration(seconds: 2),
-                                    backgroundColor: Colors.orange,
-                                  ),
-                                );
-                              }, // match discrete mode
-                              samplingTolerance: 6.0,
-                              child: Image.asset(img),
-                              doctorName: Provider.of<DoctorProvider>(
-                                context,
-                                listen: false,
-                              ).name,
-                              fileName: img,
-                              iteration: _sequence[idx].iteration,
-                              mode: 'continuous',
-                              sessionId: sessionId,
-                            ),
-                            if (_showRegionSavedMsg)
-                              Positioned(
-                                left: 0,
-                                right: 0,
-                                bottom: 12,
-                                child: AnimatedOpacity(
-                                  opacity: _showRegionSavedMsg ? 1.0 : 0.0,
-                                  duration: const Duration(milliseconds: 300),
-                                  child: Center(
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 6,
-                                        horizontal: 16,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black.withOpacity(0.7),
-                                        borderRadius: BorderRadius.circular(16),
-                                      ),
-                                      child: const Text(
-                                        'Region saved!',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 14,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                          ],
+                    Card(
+                      elevation: 8,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: SizedBox(
+                        width: 220,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 6,
+                            horizontal: 6,
+                          ),
+                          child: _buildStyledSlider(
+                            0,
+                            'Pale',
+                            'Pink',
+                            labelFontSize: 12,
+                          ),
                         ),
                       ),
                     ),
-                    const SizedBox(
-                      height: 25,
-                    ), // Space between image and sliders
-                    if (_isSelectionMode) ...[
-                      // Three sliders in a horizontal row below the image, each in its own card
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Card(
-                            elevation: 8,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(18),
-                            ),
-                            child: SizedBox(
-                              width: 220,
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 6,
-                                  horizontal: 6,
-                                ),
-                                child: _buildStyledSlider(
-                                  0,
-                                  'Pale',
-                                  'Pink',
-                                  labelFontSize: 12,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 20),
-                          Card(
-                            elevation: 8,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(18),
-                            ),
-                            child: SizedBox(
-                              width: 220,
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 6,
-                                  horizontal: 6,
-                                ),
-                                child: _buildStyledSlider(
-                                  1,
-                                  'Pink',
-                                  'Red',
-                                  labelFontSize: 12,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 20),
-                          Card(
-                            elevation: 8,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(18),
-                            ),
-                            child: SizedBox(
-                              width: 220,
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 6,
-                                  horizontal: 6,
-                                ),
-                                child: _buildStyledSlider(
-                                  2,
-                                  'Red',
-                                  'DeepRed',
-                                  labelFontSize: 12,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
+                    const SizedBox(width: 20),
+                    Card(
+                      elevation: 8,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
                       ),
-                      const SizedBox(height: 16),
-                    ],
+                      child: SizedBox(
+                        width: 220,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 6,
+                            horizontal: 6,
+                          ),
+                          child: _buildStyledSlider(
+                            1,
+                            'Pink',
+                            'Red',
+                            labelFontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 20),
+                    Card(
+                      elevation: 8,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: SizedBox(
+                        width: 220,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 6,
+                            horizontal: 6,
+                          ),
+                          child: _buildStyledSlider(
+                            2,
+                            'Red',
+                            'DeepRed',
+                            labelFontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  TextButton(
-                    onPressed: idx > 0
-                        ? () async {
-                            setState(() {
-                              idx--;
-                              _selectedSlider = null;
-                              _sliderValue0 = 0.0;
-                              _sliderValue1 = 0.0;
-                              _sliderValue2 = 0.0;
-                            });
-                            final doc = Provider.of<DoctorProvider>(
-                              context,
-                              listen: false,
-                            ).name;
-                            final iters = Provider.of<DoctorProvider>(
-                              context,
-                              listen: false,
-                            ).iterations;
-                            final sessionId = '${doc}_${iters}';
-                            final idxKey = 'lastContinuousIdx_${doc}_$iters';
-                            final prefs = await SharedPreferences.getInstance();
-                            await prefs.setInt(idxKey, idx);
-                            _loadEvent();
-                          }
-                        : null,
-                    child: const Text('Previous'),
-                  ),
-                  TextButton(
-                    onPressed: () => _handleNext(total),
-                    child: const Text('Next'),
-                  ),
-                ],
-              ),
-            ),
-            if (_isSelectionMode && _showNextWarning)
-              Padding(
-                padding: const EdgeInsets.only(top: 4.0),
-                child: Text(
-                  'Please select a color and draw at least one region to continue.',
-                  style: TextStyle(color: Colors.red[700], fontSize: 13),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            const SizedBox(height: 12),
-          ],
-        ),
-      ),
+                const SizedBox(height: 16),
+              ],
+            )
+          : const SizedBox.shrink(),
+      navigationButtons: navigationButtons,
+      imageBoxWidth: 400,
+      imageBoxAspectRatio: 1,
+      topSpacing: 24,
+      controlsSpacing: 18,
     );
   }
 
@@ -898,6 +1047,8 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
     String left,
     String right, {
     double labelFontSize = 14,
+    Color labelColor = Colors.deepPurple,
+    double labelBottomPadding = 0,
   }) {
     final isActive = _selectedSlider == idx;
     double value = 0.0;
@@ -905,108 +1056,153 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
     if (idx == 1) value = _sliderValue1;
     if (idx == 2) value = _sliderValue2;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              left,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: labelFontSize,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          _buildColorBall(
+            left,
+            idx == 0
+                ? 1 - value
+                : idx == 1
+                ? 1 - value
+                : 1 - value,
+            idx == 0
+                ? Colors.pink[100]!
+                : idx == 1
+                ? Colors.pink
+                : Colors.red,
+            isActive: isActive,
+          ),
+          const SizedBox(width: 2),
+          Expanded(
+            child: SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                activeTrackColor: isActive
+                    ? Colors.deepPurple
+                    : Colors.grey[400],
+                inactiveTrackColor: Colors.grey[200],
+                trackHeight: 6.0,
+                thumbColor: isActive ? Colors.pink : Colors.grey[500],
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12),
+                overlayColor: isActive
+                    ? Colors.pink.withOpacity(0.2)
+                    : Colors.grey.withOpacity(0.1),
+                valueIndicatorColor: Colors.deepPurple,
+              ),
+              child: Slider(
+                value: value,
+                onChanged: (v) {
+                  setState(() {
+                    if (idx == 0) _sliderValue0 = v;
+                    if (idx == 1) _sliderValue1 = v;
+                    if (idx == 2) _sliderValue2 = v;
+                  });
+                },
+                onChangeStart: (v) async {
+                  // Clear previous selection and reset other sliders
+                  if (_selectedSlider != null && _selectedSlider != idx) {
+                    String prevColorA = '', prevColorB = '';
+                    if (_selectedSlider == 0) {
+                      prevColorA = 'Pale';
+                      prevColorB = 'Pink';
+                    } else if (_selectedSlider == 1) {
+                      prevColorA = 'Pink';
+                      prevColorB = 'Red';
+                    } else if (_selectedSlider == 2) {
+                      prevColorA = 'Red';
+                      prevColorB = 'DeepRed';
+                    }
+
+                    final doc = Provider.of<DoctorProvider>(
+                      context,
+                      listen: false,
+                    ).name;
+                    final iters = Provider.of<DoctorProvider>(
+                      context,
+                      listen: false,
+                    ).iterations;
+                    final sessionId = '${doc}_$iters';
+                    final img = _sequence[this.idx].fileName;
+                    final iteration = _sequence[this.idx].iteration;
+
+                    // Reset the previous slider value
+                    setState(() {
+                      if (_selectedSlider == 0) _sliderValue0 = 0.0;
+                      if (_selectedSlider == 1) _sliderValue1 = 0.0;
+                      if (_selectedSlider == 2) _sliderValue2 = 0.0;
+                    });
+
+                    // Delete previous event from database
+                    await ContinuousDbService.deleteEvent(
+                      doctorName: doc,
+                      fileName: img,
+                      iteration: iteration,
+                      colorA: prevColorA,
+                      colorB: prevColorB,
+                      sessionId: sessionId,
+                    );
+                  }
+
+                  // Set current slider as selected
+                  setState(() {
+                    _selectedSlider = idx;
+                  });
+                },
+                onChangeEnd: (v) async {
+                  await _saveOrUpdateColorEvent(idx, v);
+                },
+                min: 0.0,
+                max: 1.0,
+                divisions: 100,
               ),
             ),
-            Text(
-              right,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: labelFontSize,
-              ),
-            ),
-          ],
-        ),
-        SliderTheme(
-          data: SliderTheme.of(context).copyWith(
-            activeTrackColor: isActive ? Colors.deepPurple : Colors.grey[400],
-            inactiveTrackColor: Colors.grey[200],
-            trackHeight: 6.0,
-            thumbColor: isActive ? Colors.pink : Colors.grey[500],
-            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12),
-            overlayColor: isActive
-                ? Colors.pink.withOpacity(0.2)
-                : Colors.grey.withOpacity(0.1),
-            valueIndicatorColor: Colors.deepPurple,
           ),
-          child: Slider(
-            value: value,
-            onChanged: (v) {
-              setState(() {
-                if (idx == 0) _sliderValue0 = v;
-                if (idx == 1) _sliderValue1 = v;
-                if (idx == 2) _sliderValue2 = v;
-              });
-            },
-            onChangeStart: (v) async {
-              // Clear previous selection and reset other sliders
-              if (_selectedSlider != null && _selectedSlider != idx) {
-                String prevColorA = '', prevColorB = '';
-                if (_selectedSlider == 0) {
-                  prevColorA = 'Pale';
-                  prevColorB = 'Pink';
-                } else if (_selectedSlider == 1) {
-                  prevColorA = 'Pink';
-                  prevColorB = 'Red';
-                } else if (_selectedSlider == 2) {
-                  prevColorA = 'Red';
-                  prevColorB = 'DeepRed';
-                }
-
-                final doc = Provider.of<DoctorProvider>(
-                  context,
-                  listen: false,
-                ).name;
-                final iters = Provider.of<DoctorProvider>(
-                  context,
-                  listen: false,
-                ).iterations;
-                final sessionId = '${doc}_${iters}';
-                final img = _sequence[this.idx].fileName;
-                final iteration = _sequence[this.idx].iteration;
-
-                // Reset the previous slider value
-                setState(() {
-                  if (_selectedSlider == 0) _sliderValue0 = 0.0;
-                  if (_selectedSlider == 1) _sliderValue1 = 0.0;
-                  if (_selectedSlider == 2) _sliderValue2 = 0.0;
-                });
-
-                // Delete previous event from database
-                await ContinuousDbService.deleteEvent(
-                  doctorName: doc,
-                  fileName: img,
-                  iteration: iteration,
-                  colorA: prevColorA,
-                  colorB: prevColorB,
-                  sessionId: sessionId,
-                );
-              }
-
-              // Set current slider as selected
-              setState(() {
-                _selectedSlider = idx;
-              });
-            },
-            onChangeEnd: (v) async {
-              await _saveOrUpdateColorEvent(idx, v);
-            },
-            min: 0.0,
-            max: 1.0,
-            divisions: 100,
+          const SizedBox(width: 2),
+          _buildColorBall(
+            right,
+            value,
+            idx == 0
+                ? Colors.pink
+                : idx == 1
+                ? Colors.red
+                : Colors.red[900]!,
+            isActive: isActive,
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildColorBall(
+    String colorName,
+    double percent,
+    Color color, {
+    bool isActive = true,
+  }) {
+    final double minSize = 22;
+    final double maxSize = 38;
+    final double size = minSize + (maxSize - minSize) * percent;
+    final Color fillColor = isActive ? color : Colors.grey[300]!;
+    final Color textColor = isActive ? Colors.white : Colors.grey[500]!;
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(color: fillColor, shape: BoxShape.circle),
+      alignment: Alignment.center,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          colorName,
+          style: TextStyle(
+            color: textColor,
+            fontWeight: FontWeight.bold,
+            fontSize: 10,
+          ),
+          textAlign: TextAlign.center,
         ),
-      ],
+      ),
     );
   }
 

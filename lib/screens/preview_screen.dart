@@ -385,12 +385,12 @@ class RegionPreviewScreen extends StatelessWidget {
   final String mode; // 'discrete' or 'continuous'
 
   const RegionPreviewScreen({
-    Key? key,
+    super.key,
     required this.fileName,
     required this.doctorName,
     required this.iteration,
     this.mode = 'discrete',
-  }) : super(key: key);
+  });
 
   /// Load the actual image so we can get its true pixel dimensions
   Future<ui.Image> _loadUiImage() async {

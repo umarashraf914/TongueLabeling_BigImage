@@ -9,12 +9,20 @@ import 'package:syncfusion_flutter_xlsio/xlsio.dart' as xlsio;
 import 'package:path/path.dart' as p;
 import 'package:light/light.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:intl/intl.dart';
+import '../utils/downloads_path.dart';
 
 import '../providers/doctor_provider.dart';
 import '../services/discrete_db_service.dart';
 import '../widgets/region_selector.dart';
 import 'preview_screen.dart';
 import 'continuous_mode_screen.dart';
+import '../widgets/labeling_screen_scaffold.dart';
+import '../widgets/mode_toolbar.dart';
+import '../widgets/user_info_card.dart';
+import '../widgets/appbar_actions_card.dart';
+import '../widgets/navigation_card.dart';
 
 // Import with prefix to avoid conflicts
 import '../services/db_service.dart' show LabelEvent, RegionSelection;
@@ -296,18 +304,17 @@ class _LabelScreenState extends State<LabelScreen> {
           prefs.setInt(idxKey, idx);
         });
         _loadEvent();
-      } else {
-        // Show warning message for 1.5 seconds
-        setState(() {
-          _showNextWarning = true;
-        });
-        Future.delayed(const Duration(milliseconds: 1500), () {
-          if (mounted) {
-            setState(() {
-              _showNextWarning = false;
-            });
-          }
-        });
+      } else if (!_canGoNext) {
+        // Show warning as SnackBar (orange, like overlap)
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Please select a color and draw at least one region to continue.',
+            ),
+            duration: Duration(seconds: 2),
+            backgroundColor: Colors.orange,
+          ),
+        );
       }
     } else {
       // In view mode, always allow next if not at the end
@@ -362,317 +369,422 @@ class _LabelScreenState extends State<LabelScreen> {
     final img = _sequence[idx].fileName;
     final iteration = _sequence[idx].iteration;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('[$doc] ${idx + 1}/$total'),
-            Text('Session: $sessionId', style: const TextStyle(fontSize: 13)),
-          ],
-        ),
-        centerTitle: false,
-        flexibleSpace: Center(
-          child: Padding(
-            padding: const EdgeInsets.only(top: 38.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  _isSelectionMode ? Icons.touch_app : Icons.visibility,
-                  size: 18,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  _isSelectionMode ? 'Selection Mode' : 'View Mode',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
+    // RegionSelector widget
+    final regionSelector = RegionSelector(
+      key: _regionKey,
+      enabled: _isSelectionMode,
+      imagePath: img,
+      onComplete: _onRegionComplete,
+      onOverlapDetected: _onOverlapDetected,
+      samplingTolerance: 6.0,
+      doctorName: doc,
+      fileName: img,
+      iteration: iteration,
+      mode: 'discrete',
+      sessionId: sessionId,
+      child: _buildImageWidget(img),
+    );
+
+    // Region saved message
+    final regionSavedMessage = _showRegionSavedMsg
+        ? Positioned(
+            left: 0,
+            right: 0,
+            bottom: 12,
+            child: AnimatedOpacity(
+              opacity: _showRegionSavedMsg ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 300),
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 6,
+                    horizontal: 16,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.7),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Text(
+                    'Region saved!',
+                    style: TextStyle(color: Colors.white, fontSize: 14),
                   ),
                 ),
-                const SizedBox(width: 10),
-                SizedBox(
-                  height: 28,
-                  child: ElevatedButton.icon(
-                    icon: Icon(
-                      _isSelectionMode ? Icons.visibility : Icons.touch_app,
-                      size: 16,
-                    ),
-                    label: Text(
-                      _isSelectionMode ? 'View' : 'Select',
-                      style: const TextStyle(fontSize: 13),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 0,
-                      ),
-                      minimumSize: const Size(0, 28),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    onPressed: () async {
-                      setState(() {
-                        _isSelectionMode = !_isSelectionMode;
-                        if (!_isSelectionMode) {
-                          _regionKey.currentState?.clearSelection();
-                        }
-                      });
-                      final prefs = await SharedPreferences.getInstance();
-                      await prefs.setBool(
-                        'discreteIsSelectionMode',
-                        _isSelectionMode,
-                      );
-                    },
-                  ),
-                ),
-                if (_isSelectionMode) ...[
-                  const SizedBox(width: 6),
-                  SizedBox(
-                    height: 28,
-                    child: ElevatedButton.icon(
-                      icon: const Icon(Icons.undo, size: 16),
-                      label: const Text('Undo', style: TextStyle(fontSize: 13)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.orange[300],
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 0,
-                        ),
-                        minimumSize: const Size(0, 28),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      onPressed: _undoLastShape,
-                    ),
-                  ),
-                ],
-              ],
+              ),
             ),
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.visibility),
-            tooltip: 'Preview Regions',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => RegionPreviewScreen(
-                    fileName: img,
-                    doctorName: doc,
-                    iteration: iteration,
-                    mode: 'discrete',
+          )
+        : null;
+
+    // Mode controls (color buttons)
+    final modeControls = _isSelectionMode
+        ? Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.center,
+              children: _koreanColor.entries.map((e) {
+                final eng = e.key;
+                final kor = e.value;
+                final selected = currentEvent?.color == eng;
+                return ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: selected ? Colors.blueAccent : null,
                   ),
-                ),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.storage),
-            tooltip: 'View DB',
-            onPressed: () => Navigator.pushNamed(context, '/db'),
-          ),
-          IconButton(
-            icon: const Icon(Icons.timeline),
-            tooltip: 'Switch to Continuous Mode',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const ContinuousModeScreen()),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete_forever),
-            tooltip: 'Reset Database',
-            onPressed: () async {
-              final confirmed = await showDialog<bool>(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('Reset Database'),
-                  content: const Text(
-                    'Are you sure you want to delete ALL labeling data on this device? This cannot be undone.',
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(false),
-                      child: const Text('Cancel'),
-                    ),
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(true),
-                      child: const Text('Reset'),
-                    ),
-                  ],
-                ),
-              );
-              if (confirmed == true) {
-                await DiscreteDbService.clearAllData();
-                setState(() {
-                  idx = 0;
-                  currentEvent = null;
-                  _regionKey.currentState?.clearSelection();
-                });
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Database reset! All data deleted.'),
+                  onPressed: () => _onColorTap(eng),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(eng),
+                      Text('($kor)', style: const TextStyle(fontSize: 12)),
+                    ],
                   ),
                 );
-              }
-            },
+              }).toList(),
+            ),
+          )
+        : const SizedBox.shrink();
+
+    // Navigation buttons
+    final navigationButtons = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 45),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          GestureDetector(
+            onTap: idx > 0
+                ? () {
+                    setState(() {
+                      idx--;
+                    });
+                    final doc = context.read<DoctorProvider>().name;
+                    final iters = context.read<DoctorProvider>().iterations;
+                    final idxKey = 'lastDiscreteIdx_${doc}_$iters';
+                    SharedPreferences.getInstance().then((prefs) {
+                      prefs.setInt(idxKey, idx);
+                    });
+                    _loadEvent();
+                  }
+                : null,
+            child: Card(
+              elevation: 8,
+              color: const Color(0xFFF3EFFF),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(32),
+              ),
+              child: SizedBox(
+                height: 56,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 28),
+                  child: Center(
+                    child: Text(
+                      'Previous',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: idx > 0
+                            ? Colors.deepPurple
+                            : Colors.deepPurple.withOpacity(0.4),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Logout',
-            onPressed: () async {
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.remove('currentUser');
-              await prefs.remove('currentIterations');
-              Navigator.pushNamedAndRemoveUntil(
-                context,
-                '/login',
-                (route) => false,
-              );
-            },
+          GestureDetector(
+            onTap: () => _handleNext(total),
+            child: Card(
+              elevation: 8,
+              color: const Color(0xFFF3EFFF),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(32),
+              ),
+              child: SizedBox(
+                height: 56,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 28),
+                  child: Center(
+                    child: Text(
+                      'Next',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        color: Colors.deepPurple,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
         ],
       ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: Stack(
-                children: [
-                  RegionSelector(
-                    key: _regionKey,
-                    enabled: _isSelectionMode,
-                    imagePath: img,
-                    onComplete: _onRegionComplete,
-                    onOverlapDetected: _onOverlapDetected,
-                    samplingTolerance: 6.0,
-                    child: _buildImageWidget(img),
-                    doctorName: doc,
-                    fileName: img,
-                    iteration: iteration,
-                    mode: 'discrete',
-                    sessionId: sessionId,
-                  ),
-                  if (_showRegionSavedMsg)
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 12,
-                      child: AnimatedOpacity(
-                        opacity: _showRegionSavedMsg ? 1.0 : 0.0,
-                        duration: const Duration(milliseconds: 300),
-                        child: Center(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 6,
-                              horizontal: 16,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.7),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: const Text(
-                              'Region saved!',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
+    );
+
+    final appBarContent = Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        // Left: User info card
+        UserInfoCard(
+          userName: doc,
+          iterations: iters,
+          mode: 'discrete',
+          currentIndex: idx,
+          totalImages: total,
+        ),
+        const Spacer(),
+        // Center: ModeToolbar
+        ModeToolbar(
+          isSelectionMode: _isSelectionMode,
+          onToggleMode: () async {
+            setState(() {
+              _isSelectionMode = !_isSelectionMode;
+              if (!_isSelectionMode) {
+                _regionKey.currentState?.clearSelection();
+              }
+            });
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setBool('discreteIsSelectionMode', _isSelectionMode);
+          },
+          onUndo: _isSelectionMode ? _undoLastShape : null,
+        ),
+        const Spacer(),
+        // Right: Actions card with 6 icons
+        AppBarActionsCard(
+          onDownload: () async {
+            try {
+              final doc = context.read<DoctorProvider>().name;
+              final iters = context.read<DoctorProvider>().iterations;
+              final sessionId = '${doc}_$iters';
+              final events = await DiscreteDbService.fetchEvents();
+              final regions = await DiscreteDbService.fetchRegions();
+              // Group regions by image/iteration
+              Map<String, List<RegionSelection>> regionMap = {};
+              for (var r in regions) {
+                if (r.sessionId == sessionId) {
+                  final key = '${r.fileName}_${r.iteration}';
+                  regionMap.putIfAbsent(key, () => []).add(r);
+                }
+              }
+              // Prepare CSV rows
+              List<List<String>> rows = [];
+              // Header
+              int maxRegions = regionMap.values.fold(
+                0,
+                (prev, list) => list.length > prev ? list.length : prev,
+              );
+              List<String> header = ['Image Name', 'Color Selected', 'Time'];
+              for (int i = 0; i < maxRegions; i++) {
+                header.add('Region ${i + 1}');
+              }
+              rows.add(header);
+              // Data rows
+              for (var e in events) {
+                if (e.sessionId != sessionId) continue;
+                final key = '${e.fileName}_${e.iteration}';
+                final regionList = regionMap[key] ?? [];
+                List<String> row = [
+                  e.fileName,
+                  e.color,
+                  DateFormat('yyyy-MM-dd HH:mm:ss').format(e.timestamp),
+                ];
+                for (var r in regionList) {
+                  row.add(r.pathJson);
+                }
+                // Pad with empty strings if fewer regions
+                while (row.length < header.length) {
+                  row.add('');
+                }
+                rows.add(row);
+              }
+              // Convert to CSV string
+              String csv = rows
+                  .map(
+                    (r) =>
+                        r.map((v) => '"${v.replaceAll('"', '""')}"').join(','),
+                  )
+                  .join('\n');
+              // Get Downloads directory
+              final now = DateTime.now();
+              final fileName =
+                  'discrete_${doc}_$sessionId${DateFormat('yyyyMMdd_HHmmss').format(now)}.csv';
+              final downloadsPath = await DownloadsPath.getDownloadsDirectory();
+              if (downloadsPath == null)
+                throw Exception('Downloads directory not found');
+              final file = File('$downloadsPath/$fileName');
+              await file.writeAsString(csv);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Exported to ${file.path}')),
+              );
+            } catch (e) {
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text('Export failed: $e')));
+            }
+          },
+          otherIcons: [
+            IconButton(
+              icon: const Icon(Icons.visibility, color: Colors.deepPurple),
+              tooltip: 'Preview Regions',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => RegionPreviewScreen(
+                      fileName: img,
+                      doctorName: doc,
+                      iteration: iteration,
+                      mode: 'discrete',
                     ),
-                ],
-              ),
+                  ),
+                );
+              },
             ),
-
-            const SizedBox(height: 12),
-
-            // Color-selection buttons
-            if (_isSelectionMode)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  alignment: WrapAlignment.center,
-                  children: _koreanColor.entries.map((e) {
-                    final eng = e.key;
-                    final kor = e.value;
-                    final selected = currentEvent?.color == eng;
-                    return ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: selected ? Colors.blueAccent : null,
-                      ),
-                      onPressed: () => _onColorTap(eng),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(eng),
-                          Text('($kor)', style: const TextStyle(fontSize: 12)),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
-
-            const SizedBox(height: 12),
-
-            // Previous / Next
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
+            IconButton(
+              icon: const Icon(Icons.storage, color: Colors.deepPurple),
+              tooltip: 'View DB',
+              onPressed: () => Navigator.pushNamed(context, '/db'),
+            ),
+            IconButton(
+              icon: const Icon(Icons.timeline, color: Colors.deepPurple),
+              tooltip: 'Switch to Continuous Mode',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const ContinuousModeScreen(),
+                  ),
+                );
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete_forever, color: Colors.deepPurple),
+              tooltip: 'Reset Database',
+              onPressed: () async {
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('Reset Database'),
+                    content: const Text(
+                      'Are you sure you want to delete ALL labeling data on this device? This cannot be undone.',
+                    ),
+                    actions: [
                       TextButton(
-                        onPressed: idx > 0
-                            ? () {
-                                setState(() {
-                                  idx--;
-                                });
-                                final doc = context.read<DoctorProvider>().name;
-                                final iters = context
-                                    .read<DoctorProvider>()
-                                    .iterations;
-                                final idxKey = 'lastDiscreteIdx_${doc}_$iters';
-                                SharedPreferences.getInstance().then((prefs) {
-                                  prefs.setInt(idxKey, idx);
-                                });
-                                _loadEvent();
-                              }
-                            : null,
-                        child: const Text('Previous'),
+                        onPressed: () => Navigator.of(context).pop(false),
+                        child: const Text('Cancel'),
                       ),
                       TextButton(
-                        onPressed: () => _handleNext(total),
-                        child: const Text('Next'),
+                        onPressed: () => Navigator.of(context).pop(true),
+                        child: const Text('Reset'),
                       ),
                     ],
                   ),
-                  if (_isSelectionMode && _showNextWarning)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4.0),
-                      child: Text(
-                        'Please select a color and draw at least one region to continue.',
-                        style: TextStyle(color: Colors.red[700], fontSize: 13),
-                        textAlign: TextAlign.center,
-                      ),
+                );
+                if (confirmed == true) {
+                  await DiscreteDbService.clearAllData();
+                  setState(() {
+                    idx = 0;
+                    currentEvent = null;
+                    _regionKey.currentState?.clearSelection();
+                  });
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Database reset! All data deleted.'),
                     ),
-                ],
-              ),
+                  );
+                }
+              },
             ),
-
-            const SizedBox(height: 12),
+            IconButton(
+              icon: const Icon(Icons.logout, color: Colors.deepPurple),
+              tooltip: 'Logout',
+              onPressed: () async {
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.remove('currentUser');
+                await prefs.remove('currentIterations');
+                Navigator.pushNamedAndRemoveUntil(
+                  context,
+                  '/login',
+                  (route) => false,
+                );
+              },
+            ),
           ],
         ),
-      ),
+      ],
+    );
+
+    return LabelingScreenScaffold(
+      appBarContent: appBarContent,
+      regionSelector: regionSelector,
+      regionSavedMessage: regionSavedMessage,
+      modeControls: _isSelectionMode
+          ? Column(
+              children: [
+                const SizedBox(height: 32),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.center,
+                    children: _koreanColor.entries.map((e) {
+                      final eng = e.key;
+                      final kor = e.value;
+                      final selected = currentEvent?.color == eng;
+                      return Card(
+                        elevation: 8,
+                        color: const Color(0xFFF3EFFF),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(32),
+                        ),
+                        child: SizedBox(
+                          height: 56,
+                          child: TextButton(
+                            onPressed: () => _onColorTap(eng),
+                            style: TextButton.styleFrom(
+                              foregroundColor: selected
+                                  ? Colors.white
+                                  : Colors.deepPurple,
+                              backgroundColor: selected
+                                  ? Colors.blueAccent
+                                  : Colors.transparent,
+                              textStyle: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(32),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                              ),
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(eng),
+                                Text(
+                                  '($kor)',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ],
+            )
+          : const SizedBox.shrink(),
+      navigationButtons: navigationButtons,
+      imageBoxWidth: 400,
+      imageBoxAspectRatio: 1,
+      topSpacing: 24,
+      controlsSpacing: 12,
     );
   }
 }
