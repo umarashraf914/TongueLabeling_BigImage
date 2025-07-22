@@ -5,14 +5,11 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:syncfusion_flutter_xlsio/xlsio.dart' as xlsio;
-import 'package:path/path.dart' as p;
 import 'package:light/light.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:intl/intl.dart';
-import '../utils/downloads_path.dart';
 
+import '../utils/downloads_path.dart';
 import '../providers/doctor_provider.dart';
 import '../services/discrete_db_service.dart';
 import '../widgets/region_selector.dart';
@@ -22,7 +19,7 @@ import '../widgets/labeling_screen_scaffold.dart';
 import '../widgets/mode_toolbar.dart';
 import '../widgets/user_info_card.dart';
 import '../widgets/appbar_actions_card.dart';
-import '../widgets/navigation_card.dart';
+import '../utils/app_constants.dart';
 
 // Import with prefix to avoid conflicts
 import '../services/db_service.dart' show LabelEvent, RegionSelection;
@@ -64,7 +61,7 @@ class _LabelScreenState extends State<LabelScreen> {
   bool _showRegionSavedMsg = false;
 
   // Add a state field for the warning
-  bool _showNextWarning = false;
+  final bool _showNextWarning = false;
 
   // Ambient light sensor
   Light? _light;
@@ -414,41 +411,14 @@ class _LabelScreenState extends State<LabelScreen> {
           )
         : null;
 
-    // Mode controls (color buttons)
-    final modeControls = _isSelectionMode
-        ? Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              alignment: WrapAlignment.center,
-              children: _koreanColor.entries.map((e) {
-                final eng = e.key;
-                final kor = e.value;
-                final selected = currentEvent?.color == eng;
-                return ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: selected ? Colors.blueAccent : null,
-                  ),
-                  onPressed: () => _onColorTap(eng),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(eng),
-                      Text('($kor)', style: const TextStyle(fontSize: 12)),
-                    ],
-                  ),
-                );
-              }).toList(),
-            ),
-          )
-        : const SizedBox.shrink();
+    // Mode controls (color buttons moved to navigation row)
+    final modeControls = const SizedBox.shrink();
 
     // Navigation buttons
     final navigationButtons = Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 45),
+      padding: const EdgeInsets.only(left: 32, right: 32, bottom: 24),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           GestureDetector(
             onTap: idx > 0
@@ -466,13 +436,15 @@ class _LabelScreenState extends State<LabelScreen> {
                   }
                 : null,
             child: Card(
-              elevation: 8,
-              color: const Color(0xFFF3EFFF),
+              elevation: AppConstants.cardElevation,
+              color: AppConstants.cardBackgroundColor,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(32),
+                borderRadius: BorderRadius.circular(
+                  AppConstants.cardBorderRadius,
+                ),
               ),
               child: SizedBox(
-                height: 56,
+                height: AppConstants.standardCardHeight,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 28),
                   child: Center(
@@ -491,16 +463,71 @@ class _LabelScreenState extends State<LabelScreen> {
               ),
             ),
           ),
+          const Spacer(),
+          // Color buttons in the middle
+          if (_isSelectionMode)
+            ..._koreanColor.entries.map((e) {
+              final eng = e.key;
+              final kor = e.value;
+              final selected = currentEvent?.color == eng;
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: Card(
+                  elevation: 8,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(
+                      AppConstants.cardBorderRadius,
+                    ),
+                  ),
+                  child: SizedBox(
+                    width: 100,
+                    height: AppConstants.standardCardHeight,
+                    child: TextButton(
+                      onPressed: () => _onColorTap(eng),
+                      style: TextButton.styleFrom(
+                        foregroundColor: selected
+                            ? Colors.white
+                            : Colors.deepPurple,
+                        backgroundColor: selected
+                            ? Colors.blueAccent
+                            : const Color(0xFFF3EFFF),
+                        textStyle: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(
+                            AppConstants.cardBorderRadius,
+                          ),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(eng),
+                          Text('($kor)', style: const TextStyle(fontSize: 10)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          const Spacer(),
           GestureDetector(
             onTap: () => _handleNext(total),
             child: Card(
-              elevation: 8,
-              color: const Color(0xFFF3EFFF),
+              elevation: AppConstants.cardElevation,
+              color: AppConstants.cardBackgroundColor,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(32),
+                borderRadius: BorderRadius.circular(
+                  AppConstants.cardBorderRadius,
+                ),
               ),
               child: SizedBox(
-                height: 56,
+                height: AppConstants.standardCardHeight,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 28),
                   child: Center(
@@ -609,8 +636,9 @@ class _LabelScreenState extends State<LabelScreen> {
               final fileName =
                   'discrete_${doc}_$sessionId${DateFormat('yyyyMMdd_HHmmss').format(now)}.csv';
               final downloadsPath = await DownloadsPath.getDownloadsDirectory();
-              if (downloadsPath == null)
+              if (downloadsPath == null) {
                 throw Exception('Downloads directory not found');
+              }
               final file = File('$downloadsPath/$fileName');
               await file.writeAsString(csv);
               ScaffoldMessenger.of(context).showSnackBar(
@@ -718,68 +746,7 @@ class _LabelScreenState extends State<LabelScreen> {
       appBarContent: appBarContent,
       regionSelector: regionSelector,
       regionSavedMessage: regionSavedMessage,
-      modeControls: _isSelectionMode
-          ? Column(
-              children: [
-                const SizedBox(height: 32),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    alignment: WrapAlignment.center,
-                    children: _koreanColor.entries.map((e) {
-                      final eng = e.key;
-                      final kor = e.value;
-                      final selected = currentEvent?.color == eng;
-                      return Card(
-                        elevation: 8,
-                        color: const Color(0xFFF3EFFF),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(32),
-                        ),
-                        child: SizedBox(
-                          height: 56,
-                          child: TextButton(
-                            onPressed: () => _onColorTap(eng),
-                            style: TextButton.styleFrom(
-                              foregroundColor: selected
-                                  ? Colors.white
-                                  : Colors.deepPurple,
-                              backgroundColor: selected
-                                  ? Colors.blueAccent
-                                  : Colors.transparent,
-                              textStyle: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(32),
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 24,
-                              ),
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(eng),
-                                Text(
-                                  '($kor)',
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ),
-              ],
-            )
-          : const SizedBox.shrink(),
+      modeControls: const SizedBox.shrink(),
       navigationButtons: navigationButtons,
       imageBoxWidth: 400,
       imageBoxAspectRatio: 1,

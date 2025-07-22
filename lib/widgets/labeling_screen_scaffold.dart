@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/app_constants.dart';
 
 /// Shared scaffold for both Discrete and Continuous labeling screens.
 /// Ensures identical layout, app bar, image box, and navigation.
@@ -21,10 +22,10 @@ class LabelingScreenScaffold extends StatelessWidget {
     this.regionSavedMessage,
     required this.modeControls,
     required this.navigationButtons,
-    this.imageBoxWidth = 320,
-    this.imageBoxAspectRatio = 3 / 4,
-    this.topSpacing = 8,
-    this.controlsSpacing = 12,
+    this.imageBoxWidth = AppConstants.defaultImageBoxWidth,
+    this.imageBoxAspectRatio = AppConstants.imageAspectRatio,
+    this.topSpacing = AppConstants.standardSpacing,
+    this.controlsSpacing = AppConstants.mediumSpacing,
   });
 
   @override
@@ -33,7 +34,7 @@ class LabelingScreenScaffold extends StatelessWidget {
       appBar: AppBar(
         title: appBarContent,
         centerTitle: true,
-        toolbarHeight: 72, // taller for custom row
+        toolbarHeight: AppConstants.customToolbarHeight,
       ),
       body: SafeArea(
         child: Column(
@@ -44,7 +45,7 @@ class LabelingScreenScaffold extends StatelessWidget {
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     final boxSize = [
-                      400.0,
+                      AppConstants.maxImageBoxSize,
                       constraints.maxWidth,
                       constraints.maxHeight,
                     ].reduce((a, b) => a < b ? a : b);

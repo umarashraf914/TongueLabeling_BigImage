@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/app_constants.dart';
 
 class AppBarActionsCard extends StatelessWidget {
   final VoidCallback onDownload;
@@ -13,19 +14,26 @@ class AppBarActionsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 56,
+      height: AppConstants.standardCardHeight,
       child: Card(
-        elevation: 8,
-        color: const Color(0xFFF3EFFF), // Soft white-purplish background
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+        elevation: AppConstants.standardElevation,
+        color: AppConstants.cardBackgroundColor,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(
+            AppConstants.standardBorderRadius,
+          ),
+        ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
+          padding: AppConstants.standardCardPadding,
           child: Row(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               IconButton(
-                icon: const Icon(Icons.download, color: Colors.deepPurple),
+                icon: const Icon(
+                  Icons.download,
+                  color: AppConstants.primaryPurple,
+                ),
                 tooltip: 'Download Excel',
                 onPressed: onDownload,
               ),

@@ -14,10 +14,18 @@ import '../widgets/labeling_screen_scaffold.dart';
 import '../widgets/mode_toolbar.dart';
 import '../widgets/user_info_card.dart';
 import '../widgets/appbar_actions_card.dart';
-import '../widgets/navigation_card.dart';
 import '../utils/downloads_path.dart';
 import 'package:intl/intl.dart';
 import 'dart:io';
+import '../utils/app_constants.dart';
+
+/// Map each English color to its single Korean label.
+const Map<String, String> _koreanColor = {
+  'Pale': '백색',
+  'Pink': '담홍색',
+  'Red': '홍색',
+  'DeepRed': '강홍색',
+};
 
 class ContinuousModeScreen extends StatefulWidget {
   const ContinuousModeScreen({super.key});
@@ -40,7 +48,7 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
   double _sliderValue2 = 0.0;
   // Remove _loadedRegions and _checkOverlapWithLoadedRegions logic
   // Add state for warning
-  bool _showNextWarning = false;
+  final bool _showNextWarning = false;
 
   @override
   void initState() {
@@ -439,14 +447,16 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Card(
-                    elevation: 8,
-                    color: const Color(0xFFF3EFFF),
+                    elevation: AppConstants.cardElevation,
+                    color: AppConstants.cardBackgroundColor,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(32),
+                      borderRadius: BorderRadius.circular(
+                        AppConstants.cardBorderRadius,
+                      ),
                     ),
                     child: SizedBox(
-                      width: 300,
-                      height: 28,
+                      width: AppConstants.sliderWidth,
+                      height: AppConstants.sliderHeight,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
                           vertical: 0,
@@ -454,8 +464,8 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
                         ),
                         child: _buildStyledSlider(
                           0,
-                          'Pale',
-                          'Pink',
+                          _koreanColor['Pale']!,
+                          _koreanColor['Pink']!,
                           labelFontSize: 12,
                           labelColor: Colors.deepPurple,
                           labelBottomPadding: 0,
@@ -465,14 +475,16 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
                   ),
                   const SizedBox(width: 20),
                   Card(
-                    elevation: 8,
-                    color: const Color(0xFFF3EFFF),
+                    elevation: AppConstants.cardElevation,
+                    color: AppConstants.cardBackgroundColor,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(32),
+                      borderRadius: BorderRadius.circular(
+                        AppConstants.cardBorderRadius,
+                      ),
                     ),
                     child: SizedBox(
-                      width: 300,
-                      height: 28,
+                      width: AppConstants.sliderWidth,
+                      height: AppConstants.sliderHeight,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
                           vertical: 0,
@@ -480,8 +492,8 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
                         ),
                         child: _buildStyledSlider(
                           1,
-                          'Pink',
-                          'Red',
+                          _koreanColor['Pink']!,
+                          _koreanColor['Red']!,
                           labelFontSize: 12,
                           labelColor: Colors.deepPurple,
                           labelBottomPadding: 0,
@@ -491,14 +503,16 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
                   ),
                   const SizedBox(width: 20),
                   Card(
-                    elevation: 8,
-                    color: const Color(0xFFF3EFFF),
+                    elevation: AppConstants.cardElevation,
+                    color: AppConstants.cardBackgroundColor,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(32),
+                      borderRadius: BorderRadius.circular(
+                        AppConstants.cardBorderRadius,
+                      ),
                     ),
                     child: SizedBox(
-                      width: 300,
-                      height: 28,
+                      width: AppConstants.sliderWidth,
+                      height: AppConstants.sliderHeight,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
                           vertical: 0,
@@ -506,8 +520,8 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
                         ),
                         child: _buildStyledSlider(
                           2,
-                          'Red',
-                          'DeepRed',
+                          _koreanColor['Red']!,
+                          _koreanColor['DeepRed']!,
                           labelFontSize: 12,
                           labelColor: Colors.deepPurple,
                           labelBottomPadding: 0,
@@ -524,9 +538,13 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
 
     // Navigation buttons
     final navigationButtons = Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32),
+      padding: const EdgeInsets.only(
+        left: 32,
+        right: 32,
+        bottom: 24,
+      ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           GestureDetector(
             onTap: idx > 0
@@ -554,13 +572,15 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
                   }
                 : null,
             child: Card(
-              elevation: 8,
-              color: const Color(0xFFF3EFFF),
+              elevation: AppConstants.cardElevation,
+              color: AppConstants.cardBackgroundColor,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(32),
+                borderRadius: BorderRadius.circular(
+                  AppConstants.cardBorderRadius,
+                ),
               ),
               child: SizedBox(
-                height: 56,
+                height: AppConstants.standardCardHeight,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 28),
                   child: Center(
@@ -579,16 +599,97 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
               ),
             ),
           ),
+          const Spacer(),
+          // Sliders in the middle
+          if (_isSelectionMode) ...[
+            Card(
+              elevation: 8,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(
+                  AppConstants.cardBorderRadius,
+                ),
+              ),
+              child: SizedBox(
+                width: 220,
+                height: AppConstants.standardCardHeight,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 6,
+                    horizontal: 6,
+                  ),
+                  child: _buildStyledSlider(
+                    0,
+                    _koreanColor['Pale']!,
+                    _koreanColor['Pink']!,
+                    labelFontSize: 12,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 20),
+            Card(
+              elevation: 8,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(
+                  AppConstants.cardBorderRadius,
+                ),
+              ),
+              child: SizedBox(
+                width: 220,
+                height: AppConstants.standardCardHeight,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 6,
+                    horizontal: 6,
+                  ),
+                  child: _buildStyledSlider(
+                    1,
+                    _koreanColor['Pink']!,
+                    _koreanColor['Red']!,
+                    labelFontSize: 12,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Card(
+              elevation: 8,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(
+                  AppConstants.cardBorderRadius,
+                ),
+              ),
+              child: SizedBox(
+                width: 220,
+                height: AppConstants.standardCardHeight,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 6,
+                    horizontal: 6,
+                  ),
+                  child: _buildStyledSlider(
+                    2,
+                    _koreanColor['Red']!,
+                    _koreanColor['DeepRed']!,
+                    labelFontSize: 12,
+                  ),
+                ),
+              ),
+            ),
+          ],
+          const Spacer(),
           GestureDetector(
             onTap: () => _handleNext(total),
             child: Card(
-              elevation: 8,
-              color: const Color(0xFFF3EFFF),
+              elevation: AppConstants.cardElevation,
+              color: AppConstants.cardBackgroundColor,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(32),
+                borderRadius: BorderRadius.circular(
+                  AppConstants.cardBorderRadius,
+                ),
               ),
               child: SizedBox(
-                height: 56,
+                height: AppConstants.standardCardHeight,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 28),
                   child: Center(
@@ -713,8 +814,9 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
               final fileName =
                   'continuous_${doc}_$sessionId${DateFormat('yyyyMMdd_HHmmss').format(now)}.csv';
               final downloadsPath = await DownloadsPath.getDownloadsDirectory();
-              if (downloadsPath == null)
+              if (downloadsPath == null) {
                 throw Exception('Downloads directory not found');
+              }
               final file = File('$downloadsPath/$fileName');
               await file.writeAsString(csv);
               ScaffoldMessenger.of(context).showSnackBar(
@@ -833,83 +935,7 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
       appBarContent: appBarContent,
       regionSelector: regionSelector,
       regionSavedMessage: regionSavedMessage,
-      modeControls: _isSelectionMode
-          ? Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Card(
-                      elevation: 8,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: SizedBox(
-                        width: 220,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            vertical: 6,
-                            horizontal: 6,
-                          ),
-                          child: _buildStyledSlider(
-                            0,
-                            'Pale',
-                            'Pink',
-                            labelFontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 20),
-                    Card(
-                      elevation: 8,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: SizedBox(
-                        width: 220,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            vertical: 6,
-                            horizontal: 6,
-                          ),
-                          child: _buildStyledSlider(
-                            1,
-                            'Pink',
-                            'Red',
-                            labelFontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 20),
-                    Card(
-                      elevation: 8,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: SizedBox(
-                        width: 220,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            vertical: 6,
-                            horizontal: 6,
-                          ),
-                          child: _buildStyledSlider(
-                            2,
-                            'Red',
-                            'DeepRed',
-                            labelFontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-              ],
-            )
-          : const SizedBox.shrink(),
+      modeControls: const SizedBox.shrink(),
       navigationButtons: navigationButtons,
       imageBoxWidth: 400,
       imageBoxAspectRatio: 1,
@@ -1068,11 +1094,7 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
                 : idx == 1
                 ? 1 - value
                 : 1 - value,
-            idx == 0
-                ? Colors.pink[100]!
-                : idx == 1
-                ? Colors.pink
-                : Colors.red,
+            Colors.deepPurple,
             isActive: isActive,
           ),
           const SizedBox(width: 2),
@@ -1084,11 +1106,11 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
                     : Colors.grey[400],
                 inactiveTrackColor: Colors.grey[200],
                 trackHeight: 6.0,
-                thumbColor: isActive ? Colors.pink : Colors.grey[500],
+                thumbColor: isActive ? Colors.deepPurple : Colors.grey[500],
                 thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12),
                 overlayColor: isActive
-                    ? Colors.pink.withOpacity(0.2)
-                    : Colors.grey.withOpacity(0.1),
+                    ? Colors.deepPurple.withOpacity(0.05)
+                    : Colors.grey.withOpacity(0.02),
                 valueIndicatorColor: Colors.deepPurple,
               ),
               child: Slider(
@@ -1163,11 +1185,7 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
           _buildColorBall(
             right,
             value,
-            idx == 0
-                ? Colors.pink
-                : idx == 1
-                ? Colors.red
-                : Colors.red[900]!,
+            Colors.deepPurple,
             isActive: isActive,
           ),
         ],
@@ -1184,7 +1202,7 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
     final double minSize = 22;
     final double maxSize = 38;
     final double size = minSize + (maxSize - minSize) * percent;
-    final Color fillColor = isActive ? color : Colors.grey[300]!;
+    final Color fillColor = isActive ? Colors.deepPurple : Colors.grey[300]!;
     final Color textColor = isActive ? Colors.white : Colors.grey[500]!;
     return Container(
       width: size,

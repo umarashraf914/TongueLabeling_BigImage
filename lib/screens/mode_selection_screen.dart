@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import '../utils/app_constants.dart';
 import 'continuous_mode_screen.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class ModeSelectionScreen extends StatelessWidget {
   const ModeSelectionScreen({super.key});
@@ -8,59 +8,96 @@ class ModeSelectionScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Select Labeling Mode'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Logout',
-            onPressed: () async {
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.remove('currentUser');
-              await prefs.remove('currentIterations');
-              Navigator.pushNamedAndRemoveUntil(
-                context,
-                '/login',
-                (route) => false,
-              );
-            },
-          ),
-        ],
-      ),
-      body: Center(
-        child: Card(
-          elevation: 12,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(32),
-          ),
-          color: Colors.white,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 48),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _ModeBox(
-                  icon: Icons.grid_on,
-                  label: 'Discrete Mode',
-                  color: Colors.blueAccent,
-                  onTap: () =>
-                      Navigator.pushReplacementNamed(context, '/label'),
-                ),
-                const SizedBox(width: 48),
-                _ModeBox(
-                  icon: Icons.timeline,
-                  label: 'Continuous Mode',
-                  color: Colors.green,
-                  onTap: () => Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const ContinuousModeScreen(),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            children: [
+              const SizedBox(height: 20),
+              // Title card in the center
+              Center(
+                child: Card(
+                  elevation: AppConstants.cardElevation,
+                  color: AppConstants.cardBackgroundColor,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(
+                      AppConstants.cardBorderRadius,
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 32,
+                      vertical: 16,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.apps,
+                          color: AppConstants.primaryPurple,
+                          size: 24,
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Select Labeling Mode',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: AppConstants.primaryPurple,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
+              // const SizedBox(height: 5),
+              // Mode selection cards
+              Expanded(
+                child: Center(
+                  child: Card(
+                    elevation: AppConstants.highElevation,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(32),
+                    ),
+                    color: AppConstants.cardBackgroundColor,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 40,
+                        vertical: 48,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _ModeBox(
+                            icon: Icons.grid_on,
+                            label: 'Discrete\nMode',
+                            color: AppConstants.primaryPurple,
+                            onTap: () => Navigator.pushReplacementNamed(
+                              context,
+                              '/label',
+                            ),
+                          ),
+                          const SizedBox(width: 48),
+                          _ModeBox(
+                            icon: Icons.timeline,
+                            label: 'Continuous\nMode',
+                            color: AppConstants.primaryPurple,
+                            onTap: () => Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const ContinuousModeScreen(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -103,7 +140,7 @@ class _ModeBox extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 60, color: color),
+            Icon(icon, size: 56, color: color),
             const SizedBox(height: 20),
             Text(
               label,

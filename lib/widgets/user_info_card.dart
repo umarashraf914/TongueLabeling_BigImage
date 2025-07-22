@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/app_constants.dart';
 
 class UserInfoCard extends StatelessWidget {
   final String userName;
@@ -19,11 +20,13 @@ class UserInfoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 56,
+      height: AppConstants.standardCardHeight,
       child: Card(
-        elevation: 8,
-        color: const Color(0xFFF3EFFF), // Soft white-purplish background
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+        elevation: AppConstants.standardElevation,
+        color: AppConstants.cardBackgroundColor,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppConstants.standardBorderRadius),
+        ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Row(

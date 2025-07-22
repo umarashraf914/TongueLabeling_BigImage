@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/app_constants.dart';
 
 class ModeToolbar extends StatelessWidget {
   final bool isSelectionMode;
@@ -15,10 +16,10 @@ class ModeToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 56,
+      height: AppConstants.standardCardHeight,
       child: Card(
-        elevation: 8,
-        color: const Color(0xFFF3EFFF), // Soft white-purplish background
+        elevation: AppConstants.standardElevation,
+        color: AppConstants.cardBackgroundColor,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
@@ -58,7 +59,7 @@ class ModeToolbar extends StatelessWidget {
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.white,
-                    elevation: 0,
+                    elevation: AppConstants.noElevation,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 12,
                       vertical: 0,
@@ -88,7 +89,7 @@ class ModeToolbar extends StatelessWidget {
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,
-                      elevation: 0,
+                      elevation: AppConstants.noElevation,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 12,
                         vertical: 0,

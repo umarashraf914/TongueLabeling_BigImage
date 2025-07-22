@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/app_constants.dart';
 
 class NavigationCard extends StatelessWidget {
   final VoidCallback? onPrevious;
@@ -17,8 +18,8 @@ class NavigationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      elevation: 8,
-      color: const Color(0xFFF3EFFF),
+      elevation: AppConstants.standardElevation,
+      color: AppConstants.cardBackgroundColor,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
@@ -30,7 +31,7 @@ class NavigationCard extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
                 foregroundColor: Colors.deepPurple,
-                elevation: 0,
+                elevation: AppConstants.noElevation,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(18),
                 ),
@@ -47,7 +48,7 @@ class NavigationCard extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
                 foregroundColor: Colors.deepPurple,
-                elevation: 0,
+                elevation: AppConstants.noElevation,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(18),
                 ),
