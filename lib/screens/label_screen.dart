@@ -68,6 +68,10 @@ class _LabelScreenState extends State<LabelScreen> {
   StreamSubscription<int>? _lightSubscription;
   int? _currentLux;
 
+  // Ambient light tracking per image
+  String? _currentImageKey;
+  int? _savedLuxForCurrentImage;
+
   @override
   void initState() {
     super.initState();
@@ -196,6 +200,14 @@ class _LabelScreenState extends State<LabelScreen> {
     final doc = context.read<DoctorProvider>().name;
     final iters = context.read<DoctorProvider>().iterations;
     final sessionId = '${doc}_$iters';
+
+    // Check if we need to save ambient light for this image
+    final imageKey = '${_sequence[idx].fileName}_${_sequence[idx].iteration}';
+    if (_currentImageKey != imageKey) {
+      _currentImageKey = imageKey;
+      _savedLuxForCurrentImage = _currentLux;
+    }
+
     if (currentEvent == null) {
       await DiscreteDbService.insertEvent(
         LabelEvent(
@@ -204,7 +216,7 @@ class _LabelScreenState extends State<LabelScreen> {
           color: color,
           iteration: _sequence[idx].iteration,
           timestamp: DateTime.now(),
-          ambientLux: _currentLux,
+          ambientLux: _savedLuxForCurrentImage,
           sessionId: sessionId,
         ),
       );
@@ -293,6 +305,9 @@ class _LabelScreenState extends State<LabelScreen> {
       if (_canGoNext && idx < total - 1) {
         setState(() {
           idx++;
+          // Reset ambient light tracking for new image
+          _currentImageKey = null;
+          _savedLuxForCurrentImage = null;
         });
         final doc = context.read<DoctorProvider>().name;
         final iters = context.read<DoctorProvider>().iterations;
@@ -318,6 +333,9 @@ class _LabelScreenState extends State<LabelScreen> {
       if (idx < total - 1) {
         setState(() {
           idx++;
+          // Reset ambient light tracking for new image
+          _currentImageKey = null;
+          _savedLuxForCurrentImage = null;
         });
         final doc = context.read<DoctorProvider>().name;
         final iters = context.read<DoctorProvider>().iterations;
@@ -425,6 +443,9 @@ class _LabelScreenState extends State<LabelScreen> {
                 ? () {
                     setState(() {
                       idx--;
+                      // Reset ambient light tracking for new image
+                      _currentImageKey = null;
+                      _savedLuxForCurrentImage = null;
                     });
                     final doc = context.read<DoctorProvider>().name;
                     final iters = context.read<DoctorProvider>().iterations;
@@ -514,7 +535,7 @@ class _LabelScreenState extends State<LabelScreen> {
                   ),
                 ),
               );
-            }).toList(),
+            }),
           const Spacer(),
           GestureDetector(
             onTap: () => _handleNext(total),

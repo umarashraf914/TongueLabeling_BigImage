@@ -10,6 +10,7 @@ import 'dart:convert';
 import '../services/db_service.dart' show RegionSelection;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math';
+import 'dart:async';
 import '../widgets/labeling_screen_scaffold.dart';
 import '../widgets/mode_toolbar.dart';
 import '../widgets/user_info_card.dart';
@@ -17,6 +18,7 @@ import '../widgets/appbar_actions_card.dart';
 import '../utils/downloads_path.dart';
 import 'package:intl/intl.dart';
 import 'dart:io';
+import 'package:light/light.dart';
 import '../utils/app_constants.dart';
 
 /// Map each English color to its single Korean label.
@@ -50,15 +52,44 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
   // Add state for warning
   final bool _showNextWarning = false;
 
+  // Ambient light sensor
+  Light? _light;
+  StreamSubscription<int>? _lightSubscription;
+  int? _currentLux;
+  int? _savedLuxForCurrentImage;
+  String? _currentImageKey;
+
   @override
   void initState() {
     super.initState();
     _initAsync();
+    _startLightSensor();
   }
 
   Future<void> _initAsync() async {
     await _buildSequence();
     await _loadLastIndexAndEvent();
+  }
+
+  void _startLightSensor() {
+    _light = Light();
+    _lightSubscription = _light!.lightSensorStream.listen(
+      (luxValue) {
+        setState(() {
+          _currentLux = luxValue;
+        });
+      },
+      onError: (err) {
+        // Optionally handle sensor errors
+        _currentLux = null;
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _lightSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadLastIndexAndEvent() async {
@@ -206,6 +237,14 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
     final sessionId = '${doc}_$iters';
     final img = _sequence[idx].fileName;
     final iteration = _sequence[idx].iteration;
+    final imageKey = '${img}_${iteration}';
+    
+    // Capture ambient light value for this image if not already set
+    if (_currentImageKey != imageKey) {
+      _currentImageKey = imageKey;
+      _savedLuxForCurrentImage = _currentLux;
+    }
+    
     // Delete all previous events for this image/iteration
     await ContinuousDbService.deleteAllEventsForImage(
       doctorName: doc,
@@ -229,7 +268,7 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
       fileName: img,
       iteration: iteration,
       timestamp: DateTime.now(),
-      ambientLux: null,
+      ambientLux: _savedLuxForCurrentImage,
       colorA: colorA,
       percentA: 100 - (value * 100),
       colorB: colorB,
@@ -302,6 +341,9 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
         _sliderValue0 = 0.0;
         _sliderValue1 = 0.0;
         _sliderValue2 = 0.0;
+        // Reset ambient light tracking for new image
+        _currentImageKey = null;
+        _savedLuxForCurrentImage = null;
       });
       final doc = Provider.of<DoctorProvider>(context, listen: false).name;
       final iters = Provider.of<DoctorProvider>(
@@ -555,6 +597,9 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
                       _sliderValue0 = 0.0;
                       _sliderValue1 = 0.0;
                       _sliderValue2 = 0.0;
+                      // Reset ambient light tracking for new image
+                      _currentImageKey = null;
+                      _savedLuxForCurrentImage = null;
                     });
                     final doc = Provider.of<DoctorProvider>(
                       context,
@@ -775,6 +820,7 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
                 'Percent A',
                 'Color B',
                 'Percent B',
+                'Ambient Light (Lux)',
               ];
               for (int i = 0; i < maxRegions; i++) {
                 header.add('Region ${i + 1}');
@@ -792,6 +838,7 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
                   e.percentA.toStringAsFixed(2),
                   e.colorB,
                   e.percentB.toStringAsFixed(2),
+                  e.ambientLux?.toString() ?? 'N/A',
                 ];
                 for (var r in regionList) {
                   row.add(r.pathJson);

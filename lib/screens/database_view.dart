@@ -248,7 +248,7 @@ class _ContinuousDatabaseViewScreenState
               ...events.map(
                 (e) => ListTile(
                   title: Text(
-                    '${e.doctorName} | ${e.fileName} | [${e.colorA} (${e.percentA.toStringAsFixed(1)}%) + ${e.colorB} (${e.percentB.toStringAsFixed(1)}%)] | pass ${e.iteration} | sessionId: ${e.sessionId}',
+                    '${e.doctorName} | ${e.fileName} | [${e.colorA} (${e.percentA.toStringAsFixed(1)}%) + ${e.colorB} (${e.percentB.toStringAsFixed(1)}%)] | pass ${e.iteration} | Lux: ${e.ambientLux ?? 'N/A'} | sessionId: ${e.sessionId}',
                   ),
                   subtitle: Text(e.timestamp.toIso8601String()),
                 ),
