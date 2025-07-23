@@ -55,13 +55,18 @@ class LabelingScreenScaffold extends StatelessWidget {
                       children: [
                         SizedBox(
                           width: boxSize,
-                          height: boxSize,
+                          height: boxSize / imageBoxAspectRatio,
                           child: AspectRatio(
-                            aspectRatio: 1,
+                            aspectRatio: imageBoxAspectRatio,
                             child: Stack(
                               children: [
-                                // regionSelector and image should use boxSize for 1:1 mapping
-                                regionSelector,
+                                // Move only the image inside regionSelector to the right
+                                Padding(
+                                  padding: const EdgeInsets.only(
+                                    left: 36.0,
+                                  ), // Adjust as needed
+                                  child: regionSelector,
+                                ),
                                 if (regionSavedMessage != null)
                                   regionSavedMessage!,
                               ],

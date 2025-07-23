@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:light/light.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
+import 'package:open_file/open_file.dart';
 
 import '../utils/downloads_path.dart';
 import '../providers/doctor_provider.dart';
@@ -615,18 +616,20 @@ class _LabelScreenState extends State<LabelScreen> {
                 }
               }
               // Prepare CSV rows
-              List<List<String>> rows = [];
-              // Header
               int maxRegions = regionMap.values.fold(
                 0,
                 (prev, list) => list.length > prev ? list.length : prev,
               );
-              List<String> header = ['Image Name', 'Color Selected', 'Time'];
+              List<String> header = [
+                'Image Name',
+                'Color Selected',
+                'Time',
+                'Ambient Light (Lux)',
+              ];
               for (int i = 0; i < maxRegions; i++) {
                 header.add('Region ${i + 1}');
               }
-              rows.add(header);
-              // Data rows
+              List<List<String>> rows = [header];
               for (var e in events) {
                 if (e.sessionId != sessionId) continue;
                 final key = '${e.fileName}_${e.iteration}';
@@ -635,11 +638,11 @@ class _LabelScreenState extends State<LabelScreen> {
                   e.fileName,
                   e.color,
                   DateFormat('yyyy-MM-dd HH:mm:ss').format(e.timestamp),
+                  e.ambientLux?.toString() ?? 'N/A',
                 ];
                 for (var r in regionList) {
                   row.add(r.pathJson);
                 }
-                // Pad with empty strings if fewer regions
                 while (row.length < header.length) {
                   row.add('');
                 }
@@ -662,8 +665,33 @@ class _LabelScreenState extends State<LabelScreen> {
               }
               final file = File('$downloadsPath/$fileName');
               await file.writeAsString(csv);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Exported to ${file.path}')),
+              // Show dialog with both actions
+              showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Export Complete'),
+                  content: Text('Exported to ${file.path}'),
+                  actions: [
+                    TextButton(
+                      onPressed: () {
+                        OpenFile.open(file.path);
+                        Navigator.of(context).pop();
+                      },
+                      child: const Text('Open File'),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        OpenFile.open(downloadsPath);
+                        Navigator.of(context).pop();
+                      },
+                      child: const Text('Open Folder'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Close'),
+                    ),
+                  ],
+                ),
               );
             } catch (e) {
               ScaffoldMessenger.of(
@@ -767,10 +795,10 @@ class _LabelScreenState extends State<LabelScreen> {
       appBarContent: appBarContent,
       regionSelector: regionSelector,
       regionSavedMessage: regionSavedMessage,
-      modeControls: const SizedBox.shrink(),
+      modeControls: modeControls,
       navigationButtons: navigationButtons,
       imageBoxWidth: 400,
-      imageBoxAspectRatio: 1,
+      imageBoxAspectRatio: 0.9, // Make image slightly less tall
       topSpacing: 24,
       controlsSpacing: 12,
     );

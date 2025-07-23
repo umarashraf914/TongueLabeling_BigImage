@@ -20,6 +20,7 @@ import 'package:intl/intl.dart';
 import 'dart:io';
 import 'package:light/light.dart';
 import '../utils/app_constants.dart';
+import 'package:open_file/open_file.dart';
 
 /// Map each English color to its single Korean label.
 const Map<String, String> _koreanColor = {
@@ -237,14 +238,14 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
     final sessionId = '${doc}_$iters';
     final img = _sequence[idx].fileName;
     final iteration = _sequence[idx].iteration;
-    final imageKey = '${img}_${iteration}';
-    
+    final imageKey = '${img}_$iteration';
+
     // Capture ambient light value for this image if not already set
     if (_currentImageKey != imageKey) {
       _currentImageKey = imageKey;
       _savedLuxForCurrentImage = _currentLux;
     }
-    
+
     // Delete all previous events for this image/iteration
     await ContinuousDbService.deleteAllEventsForImage(
       doctorName: doc,
@@ -580,11 +581,7 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
 
     // Navigation buttons
     final navigationButtons = Padding(
-      padding: const EdgeInsets.only(
-        left: 32,
-        right: 32,
-        bottom: 24,
-      ),
+      padding: const EdgeInsets.only(left: 32, right: 32, bottom: 24),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -866,8 +863,33 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
               }
               final file = File('$downloadsPath/$fileName');
               await file.writeAsString(csv);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Exported to ${file.path}')),
+              // Show dialog with both actions
+              showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Export Complete'),
+                  content: Text('Exported to ${file.path}'),
+                  actions: [
+                    TextButton(
+                      onPressed: () {
+                        OpenFile.open(file.path);
+                        Navigator.of(context).pop();
+                      },
+                      child: const Text('Open File'),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        OpenFile.open(downloadsPath);
+                        Navigator.of(context).pop();
+                      },
+                      child: const Text('Open Folder'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Close'),
+                    ),
+                  ],
+                ),
               );
             } catch (e) {
               ScaffoldMessenger.of(
@@ -985,7 +1007,7 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
       modeControls: const SizedBox.shrink(),
       navigationButtons: navigationButtons,
       imageBoxWidth: 400,
-      imageBoxAspectRatio: 1,
+      imageBoxAspectRatio: 0.9, // Make image slightly less tall
       topSpacing: 24,
       controlsSpacing: 18,
     );
@@ -1229,12 +1251,7 @@ class _ContinuousModeScreenState extends State<ContinuousModeScreen> {
             ),
           ),
           const SizedBox(width: 2),
-          _buildColorBall(
-            right,
-            value,
-            Colors.deepPurple,
-            isActive: isActive,
-          ),
+          _buildColorBall(right, value, Colors.deepPurple, isActive: isActive),
         ],
       ),
     );

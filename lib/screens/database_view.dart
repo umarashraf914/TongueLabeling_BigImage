@@ -110,7 +110,7 @@ class _DatabaseViewScreenState extends State<DatabaseViewScreen> {
               ...events.map(
                 (e) => ListTile(
                   title: Text(
-                    '${e.doctorName} | ${e.fileName} | [${e.color}] | pass ${e.iteration} | sessionId: ${e.sessionId}',
+                    '${e.doctorName} | ${e.fileName} | [${e.color}] | pass ${e.iteration} | Lux:  ${e.ambientLux ?? 'N/A'} | sessionId: ${e.sessionId}',
                   ),
                   subtitle: Text(e.timestamp.toIso8601String()),
                 ),
