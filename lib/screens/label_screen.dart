@@ -594,6 +594,10 @@ class _LabelScreenState extends State<LabelScreen> {
             });
             final prefs = await SharedPreferences.getInstance();
             await prefs.setBool('discreteIsSelectionMode', _isSelectionMode);
+            // If switching to selection mode, reload regions for current image
+            if (_isSelectionMode) {
+              await _loadEvent();
+            }
           },
           onUndo: _isSelectionMode ? _undoLastShape : null,
         ),
